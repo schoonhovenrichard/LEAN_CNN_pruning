@@ -22,6 +22,7 @@ def get_global_accuracy(model, test_dl):
         total += labels.numel()
         correct += (predicted == labels).sum().item()
     print('     Accuracy of the network on the 10000 test images: {0:.2f}%'.format(100 * correct / float(total)))
+    return float(correct/float(total))
 
 if __name__ == '__main__':
     # The number of input channels of the MSD network
@@ -86,13 +87,13 @@ if __name__ == '__main__':
                 model.save(f"trained_models/msd_network_d={0}_epoch_{1}.torch".format(depth, epoch), epoch)
 
     # The parameters can be reloaded again:
-    model.load("trained_models/msd_network_d=50_epoch_30.torch")
+    model.load("trained_models/msd_network_d=50_epoch_47.torch")
 
     # Test on test set
     test_input_glob = path+"test/noisy/*.tiff"
     test_target_glob = path+"test/label/*.tiff"
 
     test_ds = mp.ImageDataset(test_input_glob, test_target_glob, labels=labels)
-    test_dl = DataLoader(test_ds, batch_size, shuffle=False)
+    test_dl = DataLoader(test_ds, 1, shuffle=False)
 
     acc = get_global_accuracy(model, test_dl)
