@@ -9,7 +9,7 @@ from pruning_utils import *
 import graph_algorithms as gru
 
 
-def LEAN_SV_ResNet50(pmodel, tot_perc, Redun=True):
+def LEAN_SV_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
     r"""Prune FCN-ResNet50 model using LEAN pruning.
 
     Args:
@@ -26,7 +26,8 @@ def LEAN_SV_ResNet50(pmodel, tot_perc, Redun=True):
     if pruned_before_ResNet50(pmodel):
         prun_conv, tot_conv, frac_prun = fraction_pruned_convs_ResNet50(pmodel)
         if frac_prun >= 1 - tot_perc:
-            print("No pruning to be done")
+            if verbose:
+                print("No pruning to be done")
             return pmodel
         perc = 1.0 - tot_perc/(1.0 - frac_prun)
     else:
@@ -54,7 +55,8 @@ def LEAN_SV_ResNet50(pmodel, tot_perc, Redun=True):
     for modul, nam in parameters_to_prune:
         orig = getattr(modul, nam)
         nr_nodes += orig.size()[0]
-    print("Number of nodes in graph:", nr_nodes)
+    if verbose:
+        print("Number of nodes in graph:", nr_nodes)
 
     norm_adjacency_matrix = np.zeros(shape=(nr_nodes,nr_nodes),dtype=np.float32)
     skip_connection_matrix = np.zeros(shape=(nr_nodes,nr_nodes),dtype=np.bool)
@@ -147,7 +149,7 @@ def LEAN_SV_ResNet50(pmodel, tot_perc, Redun=True):
         apply_mask_to_batchnorm_ResNet50(pmodel)
     return pmodel
 
-def IndivL1_Global_ResNet50(pmodel, tot_perc, Redun=True):
+def IndivL1_Global_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
     r"""Prune FCN-ResNet50 model using individual filter 
          pruning based on the L1 vector norm.
 
@@ -166,7 +168,8 @@ def IndivL1_Global_ResNet50(pmodel, tot_perc, Redun=True):
     if pruned_before_ResNet50(pmodel):
         prun_conv, tot_conv, frac_prun = fraction_pruned_convs_ResNet50(pmodel)
         if frac_prun >= 1 - tot_perc:
-            print("No pruning to be done")
+            if verbose:
+                print("No pruning to be done")
             return pmodel
         perc = 1.0 - tot_perc/(1.0 - frac_prun)
     else:
@@ -211,7 +214,7 @@ def IndivL1_Global_ResNet50(pmodel, tot_perc, Redun=True):
         apply_mask_to_batchnorm_ResNet50(pmodel)
     return pmodel
 
-def IndivSV_Global_ResNet50(pmodel, tot_perc, Redun=True):
+def IndivSV_Global_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
     r"""Prune FCN-ResNet50 model using individual filter 
          pruning based on the spectral operator norm.
 
@@ -229,7 +232,8 @@ def IndivSV_Global_ResNet50(pmodel, tot_perc, Redun=True):
     if pruned_before_ResNet50(pmodel):
         prun_conv, tot_conv, frac_prun = fraction_pruned_convs_ResNet50(pmodel)
         if frac_prun >= 1 - tot_perc:
-            print("No pruning to be done")
+            if verbose:
+                print("No pruning to be done")
             return pmodel
         perc = 1.0 - tot_perc/(1.0 - frac_prun)
     else:
@@ -294,7 +298,7 @@ def IndivSV_Global_ResNet50(pmodel, tot_perc, Redun=True):
         apply_mask_to_batchnorm_ResNet50(pmodel)
     return pmodel
 
-def LEAN_SV_MSD(pmodel, tot_perc, Redun=True, verbose=True):
+def LEAN_SV_MSD(pmodel, tot_perc, Redun=True, verbose=False):
     r"""Prune MS-D model using LEAN pruning. 
 
     Args:
@@ -373,7 +377,7 @@ def LEAN_SV_MSD(pmodel, tot_perc, Redun=True, verbose=True):
         prune_biases_MSD(pmodel)
     return pmodel
 
-def IndivSV_Global_MSD(pmodel, tot_perc, Redun=True, verbose=True):
+def IndivSV_Global_MSD(pmodel, tot_perc, Redun=True, verbose=False):
     r"""Prune MS-D model using individual filter pruning
         using the spectral operator norm.
 
@@ -443,7 +447,7 @@ def IndivSV_Global_MSD(pmodel, tot_perc, Redun=True, verbose=True):
         prune_biases_MSD(pmodel)
     return pmodel
 
-def IndivL1_Global_MSD(pmodel, tot_perc, Redun=True, verbose=True):
+def IndivL1_Global_MSD(pmodel, tot_perc, Redun=True, verbose=False):
     r"""Prune MS-D model using individual filter pruning
         using the L1 vector norm.
 
@@ -511,7 +515,7 @@ def IndivL1_Global_MSD(pmodel, tot_perc, Redun=True, verbose=True):
         prune_biases_MSD(pmodel)
     return pmodel
 
-def LEAN_SV_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=True):
+def LEAN_SV_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=False):
     r"""Prune MS-D model using LEAN pruning, excluding the
          final layer of 1x1-convolutions. 
 
@@ -588,7 +592,7 @@ def LEAN_SV_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=True):
         prune_biases_MSD3x3(pmodel)
     return pmodel
 
-def IndivL1_Global_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=True):
+def IndivL1_Global_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=False):
     r"""Prune MS-D model using individual filter pruning
         using the L1 vector norm, excluding the final layer
         of 1x1 convolutions.
@@ -657,7 +661,7 @@ def IndivL1_Global_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=True):
         prune_biases_MSD3x3(pmodel)
     return pmodel
 
-def IndivSV_Global_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=True):
+def IndivSV_Global_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=False):
     r"""Prune MS-D model using individual filter pruning
         using the spectral operator norm, excluding the 
         final layer of 1x1 convolutions.
@@ -752,7 +756,7 @@ def prune_biases_MSD(model):
     method = prune.CustomFromMask(bias_mask)
     method.apply(mod, "bias", bias_mask)
 
-def Prune_Redundant_Convolutions_MSD(model):
+def Prune_Redundant_Convolutions_MSD(model, verbose=False):
     r"""Prune redundant convolutions of MS-D model. A convolution
     is labeled as redundant if
         1) all the input convolutions related to it are pruned.
@@ -784,7 +788,8 @@ def Prune_Redundant_Convolutions_MSD(model):
         prev_mask = conv_masks[cin - model.c_in]
         if prev_mask.sum() == 0:
             final_mask[:,cin] = 0
-    print("Pruned {} redundant convolutions.".format(count))
+    if verbose:
+        print("Pruned {} redundant convolutions.".format(count))
     prune_biases_MSD(model)
 
 def prune_biases_MSD3x3(model):
@@ -804,7 +809,7 @@ def prune_biases_MSD3x3(model):
     method = prune.CustomFromMask(bias_mask)
     method.apply(mod, "bias", bias_mask)
 
-def Prune_Redundant_Convolutions_MSD3x3(model):
+def Prune_Redundant_Convolutions_MSD3x3(model, verbose=False):
     r"""Prune redundant convolutions of MS-D model, excluding 
     the final layer. A convolution is labeled as redundant if
         1) all the input convolutions related to it are pruned.
@@ -829,7 +834,8 @@ def Prune_Redundant_Convolutions_MSD3x3(model):
                         count += 1
                     mask[:,model.c_in + cin,:] = 0
         it += 1
-    print("Pruned {} redundant convolutions.".format(count))
+    if verbose:
+        print("Pruned {} redundant convolutions.".format(count))
     prune_biases_MSD3x3(model)
 
 def apply_mask_to_batchnorm_ResNet50(pmodel):
@@ -856,7 +862,7 @@ def apply_mask_to_batchnorm_ResNet50(pmodel):
             method.apply(modul, nam, bn_mask)
         it += 1
 
-def Prune_Redundant_Convolutions_ResNet50(pmodel, bn_thrs = 1e-10):
+def Prune_Redundant_Convolutions_ResNet50(pmodel, bn_thrs=1e-10, verbose=False):
     r"""Prune redundant convolutions of FCN-ResNet50 model. 
     A convolution is labeled as redundant if
         1) all the input convolutions related to it are pruned.
@@ -902,7 +908,8 @@ def Prune_Redundant_Convolutions_ResNet50(pmodel, bn_thrs = 1e-10):
                     mask[:,i] = 0
         it += 1
     apply_mask_to_batchnorm_ResNet50(pmodel)
-    print("Pruned redundancies type 1:", count)
+    if verbose:
+        print("Pruned redundancies type 1:", count)
 
     # There are also nodes that are not pruned but always output zero_-valued images due to 
     # ReLU. These nodes can be found by finding running_variances that have gone to 0.

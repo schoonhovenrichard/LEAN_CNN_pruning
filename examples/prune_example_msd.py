@@ -55,24 +55,48 @@ if __name__ == '__main__':
     indivL1_pruning = False
     indivSV_pruning = False
 
-    perc = 0.2
-    nsteps = 10
+    perc = 0.05
+    nsteps = 15
     retraining_epochs = 3
-    tot_perc = 1.0
     percentage = np.exp(np.log(perc)/float(nsteps))
     print("Pruning to ratio {0} in {1} steps.".format(perc, nsteps))
     print("Removes {0:.2f}% of convolutions each step.".format(100*(1.0-percentage)))
     if lean_pruning:
+        tot_perc = 1.0
         print("Starting LEAN pruning")
         for step in range(nsteps):
             tot_perc *= percentage
-            # We are not including the final layer as outlined in paper.
+            # We do not include the final layer for pruning as outlined in paper.
             model = lean.LEAN_SV_MSD_3x3(model, tot_perc, verbose=False)
-            acc = get_global_accuracy(model, test_dl)
             for epoch in range(retraining_epochs):
                 model.train(train_dl, 1)
                 train_error = model.validate(train_dl)
                 print(f"{epoch:05} Training error: {train_error: 0.6f}")
             acc = get_global_accuracy(model, test_dl)
-            print("Fraction pruned convolutions:", lean.fraction_pruned_convs_MSD3x3(model))
-            model.save("trained_models/msd_network_LEAN_d={0}_acc={1:.4f}.torch".format(depth, acc), epoch)
+            model.save("pruned_models/msd_network_LEAN_d={0}_ratio={1:.4f}_acc={2:.4f}.torch".format(depth, tot_perc, acc), epoch)
+    if indivL1_pruning:
+        tot_perc = 1.0
+        print("Starting individual filter pruning (L1) pruning")
+        for step in range(nsteps):
+            tot_perc *= percentage
+            # We do not include the final layer for pruning as outlined in paper.
+            model = lean.indivL1_Global_MSD_3x3(model, tot_perc, verbose=False)
+            for epoch in range(retraining_epochs):
+                model.train(train_dl, 1)
+                train_error = model.validate(train_dl)
+                print(f"{epoch:05} Training error: {train_error: 0.6f}")
+            acc = get_global_accuracy(model, test_dl)
+            model.save("pruned_models/msd_network_indivL1_d={0}_ratio={1:.4f}_acc={2:.4f}.torch".format(depth, tot_perc, acc), epoch)
+    if indivSV_pruning:
+        tot_perc = 1.0
+        print("Starting individual filter pruning (L1) pruning")
+        for step in range(nsteps):
+            tot_perc *= percentage
+            # We do not include the final layer for pruning as outlined in paper.
+            model = lean.indivSV_Global_MSD_3x3(model, tot_perc, verbose=False)
+            for epoch in range(retraining_epochs):
+                model.train(train_dl, 1)
+                train_error = model.validate(train_dl)
+                print(f"{epoch:05} Training error: {train_error: 0.6f}")
+            acc = get_global_accuracy(model, test_dl)
+            model.save("pruned_models/msd_network_indivSV_d={0}_ratio={1:.4f}_acc={2:.4f}.torch".format(depth, tot_perc, acc), epoch)
