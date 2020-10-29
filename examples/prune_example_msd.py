@@ -80,7 +80,7 @@ if __name__ == '__main__':
         for step in range(nsteps):
             tot_perc *= percentage
             # We do not include the final layer for pruning as outlined in paper.
-            model = lean.indivL1_Global_MSD_3x3(model, tot_perc, verbose=False)
+            model = lean.IndivL1_Global_MSD_3x3(model, tot_perc, verbose=False)
             for epoch in range(retraining_epochs):
                 model.train(train_dl, 1)
                 train_error = model.validate(train_dl)
@@ -89,11 +89,11 @@ if __name__ == '__main__':
             model.save("pruned_models/msd_network_indivL1_d={0}_ratio={1:.4f}_acc={2:.4f}.torch".format(depth, tot_perc, acc), epoch)
     if indivSV_pruning:
         tot_perc = 1.0
-        print("Starting individual filter pruning (L1) pruning")
+        print("Starting individual filter pruning (SV) pruning")
         for step in range(nsteps):
             tot_perc *= percentage
             # We do not include the final layer for pruning as outlined in paper.
-            model = lean.indivSV_Global_MSD_3x3(model, tot_perc, verbose=False)
+            model = lean.IndivSV_Global_MSD_3x3(model, tot_perc, verbose=False)
             for epoch in range(retraining_epochs):
                 model.train(train_dl, 1)
                 train_error = model.validate(train_dl)
