@@ -9,10 +9,20 @@ from pruning_utils import *
 import graph_algorithms as gru
 
 
-def LEAN_SV_ResNet50(pmodel, tot_perc, Redun=True, ScaleDim=False):
-    r"""TODO
+def LEAN_SV_ResNet50(pmodel, tot_perc, Redun=True):
+    r"""Prune FCN-ResNet50 model using LEAN pruning.
+
+    Args:
+        - pmodel: PyTorch-model of FCN-ResNet50 to be pruned.
+        - tot_perc (float): The total fraction of convolutions
+            we want pruned at the end of this pruning step.
+        - Redun (bool): Whether to perform redundancy pruning
+            at the end of the pruning phase. Default is True.
     """
-    # perc refers to the total percentage of pruned convolutions we want to achieve
+    # Calculate by what percentage the model needs to be pruned
+    # to obtain 'tot_perc' percent of pruning. It can e.g. require
+    # less than the expected percentage because redundancy pruning
+    # removed a significant amount in the previous pruning phase.
     if pruned_before_ResNet50(pmodel):
         prun_conv, tot_conv, frac_prun = fraction_pruned_convs_ResNet50(pmodel)
         if frac_prun >= 1 - tot_perc:
@@ -37,8 +47,6 @@ def LEAN_SV_ResNet50(pmodel, tot_perc, Redun=True, ScaleDim=False):
     #  when the identity points to a downsample layer, there are several connections
     skip_idxs = np.array([(8,3),(8,4),(11,7),(18,13),(18,14),(21,17),(24,20),(31,26),(31,27),(34,30),(37,33),(40,36),(43,39),(50,45),(50,46)])
 
-    # If we are considering redundancy pruning, we must remove zero-images to avoid
-    #  batch-scaling to skew the norms
     if pruned_before_ResNet50(pmodel) and Redun:
         Prune_Redundant_Convolutions_ResNet50(pmodel)
 
@@ -140,8 +148,20 @@ def LEAN_SV_ResNet50(pmodel, tot_perc, Redun=True, ScaleDim=False):
     return pmodel
 
 def IndivL1_Global_ResNet50(pmodel, tot_perc, Redun=True):
-    r"""TODO
+    r"""Prune FCN-ResNet50 model using individual filter 
+         pruning based on the L1 vector norm.
+
+    Args:
+        - pmodel: PyTorch-model of FCN-ResNet50 to be pruned.
+        - tot_perc (float): The total fraction of convolutions
+            we want pruned at the end of this pruning step.
+        - Redun (bool): Whether to perform redundancy pruning
+            at the end of the pruning phase. Default is True.
     """
+    # Calculate by what percentage the model needs to be pruned
+    # to obtain 'tot_perc' percent of pruning. It can e.g. require
+    # less than the expected percentage because redundancy pruning
+    # removed a significant amount in the previous pruning phase.
     N = 1
     if pruned_before_ResNet50(pmodel):
         prun_conv, tot_conv, frac_prun = fraction_pruned_convs_ResNet50(pmodel)
@@ -192,8 +212,20 @@ def IndivL1_Global_ResNet50(pmodel, tot_perc, Redun=True):
     return pmodel
 
 def IndivSV_Global_ResNet50(pmodel, tot_perc, Redun=True):
-    r"""TODO
+    r"""Prune FCN-ResNet50 model using individual filter 
+         pruning based on the spectral operator norm.
+
+    Args:
+        - pmodel: PyTorch-model of FCN-ResNet50 to be pruned.
+        - tot_perc (float): The total fraction of convolutions
+            we want pruned at the end of this pruning step.
+        - Redun (bool): Whether to perform redundancy pruning
+            at the end of the pruning phase. Default is True.
     """
+    # Calculate by what percentage the model needs to be pruned
+    # to obtain 'tot_perc' percent of pruning. It can e.g. require
+    # less than the expected percentage because redundancy pruning
+    # removed a significant amount in the previous pruning phase.
     if pruned_before_ResNet50(pmodel):
         prun_conv, tot_conv, frac_prun = fraction_pruned_convs_ResNet50(pmodel)
         if frac_prun >= 1 - tot_perc:
@@ -263,8 +295,19 @@ def IndivSV_Global_ResNet50(pmodel, tot_perc, Redun=True):
     return pmodel
 
 def LEAN_SV_MSD(pmodel, tot_perc, Redun=True, verbose=True):
-    r"""TODO
+    r"""Prune MS-D model using LEAN pruning. 
+
+    Args:
+        - pmodel: PyTorch-model of MS-D network to be pruned.
+        - tot_perc (float): The total fraction of convolutions
+            we want pruned at the end of this pruning step.
+        - Redun (bool): Whether to perform redundancy pruning
+            at the end of the pruning phase. Default is True.
     """
+    # Calculate by what percentage the model needs to be pruned
+    # to obtain 'tot_perc' percent of pruning. It can e.g. require
+    # less than the expected percentage because redundancy pruning
+    # removed a significant amount in the previous pruning phase.
     if pruned_before_MSD(pmodel):
         prun_conv, tot_conv, frac_prun = fraction_pruned_convs_MSD(pmodel)
         if frac_prun >= 1 - tot_perc:
@@ -331,6 +374,20 @@ def LEAN_SV_MSD(pmodel, tot_perc, Redun=True, verbose=True):
     return pmodel
 
 def IndivSV_Global_MSD(pmodel, tot_perc, Redun=True, verbose=True):
+    r"""Prune MS-D model using individual filter pruning
+        using the spectral operator norm.
+
+    Args:
+        - pmodel: PyTorch-model of MS-D network to be pruned.
+        - tot_perc (float): The total fraction of convolutions
+            we want pruned at the end of this pruning step.
+        - Redun (bool): Whether to perform redundancy pruning
+            at the end of the pruning phase. Default is True.
+    """
+    # Calculate by what percentage the model needs to be pruned
+    # to obtain 'tot_perc' percent of pruning. It can e.g. require
+    # less than the expected percentage because redundancy pruning
+    # removed a significant amount in the previous pruning phase.
     if pruned_before_MSD(pmodel):
         prun_conv, tot_conv, frac_prun = fraction_pruned_convs_MSD(pmodel)
         if frac_prun >= 1 - tot_perc:
@@ -387,8 +444,20 @@ def IndivSV_Global_MSD(pmodel, tot_perc, Redun=True, verbose=True):
     return pmodel
 
 def IndivL1_Global_MSD(pmodel, tot_perc, Redun=True, verbose=True):
-    r"""TODO
+    r"""Prune MS-D model using individual filter pruning
+        using the L1 vector norm.
+
+    Args:
+        - pmodel: PyTorch-model of MS-D network to be pruned.
+        - tot_perc (float): The total fraction of convolutions
+            we want pruned at the end of this pruning step.
+        - Redun (bool): Whether to perform redundancy pruning
+            at the end of the pruning phase. Default is True.
     """
+    # Calculate by what percentage the model needs to be pruned
+    # to obtain 'tot_perc' percent of pruning. It can e.g. require
+    # less than the expected percentage because redundancy pruning
+    # removed a significant amount in the previous pruning phase.
     N = 1 # Order of Ln norm
     if pruned_before_MSD(pmodel):
         prun_conv, tot_conv, frac_prun = fraction_pruned_convs_MSD(pmodel)
@@ -443,9 +512,20 @@ def IndivL1_Global_MSD(pmodel, tot_perc, Redun=True, verbose=True):
     return pmodel
 
 def LEAN_SV_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=True):
-    r"""Prunes a percentage of the weights in the entire MSD network at once, not only per layer,
-    using a longest path calculated by log-multiplication distance on some Fourier-SVD norm.
+    r"""Prune MS-D model using LEAN pruning, excluding the
+         final layer of 1x1-convolutions. 
+
+    Args:
+        - pmodel: PyTorch-model of MS-D network to be pruned.
+        - tot_perc (float): The total fraction of convolutions
+            we want pruned at the end of this pruning step.
+        - Redun (bool): Whether to perform redundancy pruning
+            at the end of the pruning phase. Default is True.
     """
+    # Calculate by what percentage the model needs to be pruned
+    # to obtain 'tot_perc' percent of pruning. It can e.g. require
+    # less than the expected percentage because redundancy pruning
+    # removed a significant amount in the previous pruning phase.
     if pruned_before_MSD(pmodel):
         prun_conv, tot_conv, frac_prun = fraction_pruned_convs_MSD3x3(pmodel)
         if frac_prun >= 1 - tot_perc:
@@ -509,6 +589,21 @@ def LEAN_SV_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=True):
     return pmodel
 
 def IndivL1_Global_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=True):
+    r"""Prune MS-D model using individual filter pruning
+        using the L1 vector norm, excluding the final layer
+        of 1x1 convolutions.
+
+    Args:
+        - pmodel: PyTorch-model of MS-D network to be pruned.
+        - tot_perc (float): The total fraction of convolutions
+            we want pruned at the end of this pruning step.
+        - Redun (bool): Whether to perform redundancy pruning
+            at the end of the pruning phase. Default is True.
+    """
+    # Calculate by what percentage the model needs to be pruned
+    # to obtain 'tot_perc' percent of pruning. It can e.g. require
+    # less than the expected percentage because redundancy pruning
+    # removed a significant amount in the previous pruning phase.
     N = 1 # Order of Ln norm
     if pruned_before_MSD(pmodel):
         prun_conv, tot_conv, frac_prun = fraction_pruned_convs_MSD3x3(pmodel)
@@ -563,6 +658,21 @@ def IndivL1_Global_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=True):
     return pmodel
 
 def IndivSV_Global_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=True):
+    r"""Prune MS-D model using individual filter pruning
+        using the spectral operator norm, excluding the 
+        final layer of 1x1 convolutions.
+
+    Args:
+        - pmodel: PyTorch-model of MS-D network to be pruned.
+        - tot_perc (float): The total fraction of convolutions
+            we want pruned at the end of this pruning step.
+        - Redun (bool): Whether to perform redundancy pruning
+            at the end of the pruning phase. Default is True.
+    """
+    # Calculate by what percentage the model needs to be pruned
+    # to obtain 'tot_perc' percent of pruning. It can e.g. require
+    # less than the expected percentage because redundancy pruning
+    # removed a significant amount in the previous pruning phase.
     if pruned_before_MSD(pmodel):
         prun_conv, tot_conv, frac_prun = fraction_pruned_convs_MSD3x3(pmodel)
         if frac_prun >= 1 - tot_perc:
@@ -624,7 +734,10 @@ def IndivSV_Global_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=True):
 ##########################################################################
 
 def prune_biases_MSD(model):
-    # final_layer biases are for output channels, will never be pruned
+    r"""
+    Prune biases in MS-D model layers if the entire layer is pruned.
+    The final_layer biases are for output channels, will never be pruned
+    """
     conv_masks = get_conv_masks_MSD(model)
     mod = model.msd.msd_block
     model_device = conv_masks[0].device
@@ -640,6 +753,10 @@ def prune_biases_MSD(model):
     method.apply(mod, "bias", bias_mask)
 
 def Prune_Redundant_Convolutions_MSD(model):
+    r"""Prune redundant convolutions of MS-D model. A convolution
+    is labeled as redundant if
+        1) all the input convolutions related to it are pruned.
+    """
     conv_masks = get_conv_masks_MSD(model)
    
     # In this loop, we check for each output channel of each layer if all its input channels
@@ -671,6 +788,10 @@ def Prune_Redundant_Convolutions_MSD(model):
     prune_biases_MSD(model)
 
 def prune_biases_MSD3x3(model):
+    r"""
+    Prune biases in MS-D model layers if the entire layer is pruned,
+     excluding the final layer of 1x1 convolutions.
+    """
     conv_masks = get_conv_masks_MSD3x3(model)
     mod = model.msd.msd_block
     model_device = conv_masks[0].device
@@ -684,6 +805,10 @@ def prune_biases_MSD3x3(model):
     method.apply(mod, "bias", bias_mask)
 
 def Prune_Redundant_Convolutions_MSD3x3(model):
+    r"""Prune redundant convolutions of MS-D model, excluding 
+    the final layer. A convolution is labeled as redundant if
+        1) all the input convolutions related to it are pruned.
+    """
     conv_masks = get_conv_masks_MSD3x3(model)
    
     # In this loop, we check for each output channel of each layer if all its input channels
@@ -708,6 +833,10 @@ def Prune_Redundant_Convolutions_MSD3x3(model):
     prune_biases_MSD3x3(model)
 
 def apply_mask_to_batchnorm_ResNet50(pmodel):
+    r"""Given the pruned masks of the convolutional layers,
+    prune the batch normalization channels if the entire 
+    associated convolutional channel has been pruned.
+    """
     conv_masks = get_conv_masks_ResNet50(pmodel)
     names = ['weight','bias']
     batchnorms_to_prune = get_batchnorms_ResNet50(pmodel)
@@ -728,6 +857,12 @@ def apply_mask_to_batchnorm_ResNet50(pmodel):
         it += 1
 
 def Prune_Redundant_Convolutions_ResNet50(pmodel, bn_thrs = 1e-10):
+    r"""Prune redundant convolutions of FCN-ResNet50 model. 
+    A convolution is labeled as redundant if
+        1) all the input convolutions related to it are pruned.
+        2) the running variance of the associated batch normalization
+            channel is less than 10^-10.
+    """
     parameters_to_prune = get_convs_ResNet50(pmodel)
     conv_masks = get_conv_masks_ResNet50(pmodel)
     batchnorms = get_batchnorms_ResNet50(pmodel)
