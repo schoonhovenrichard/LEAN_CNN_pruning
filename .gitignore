@@ -1,0 +1,8 @@
+*.swp
+*.bbl
+*.blg
+*.log
+*.gz
+*.aux
+__pycache__/
+*.pyc
