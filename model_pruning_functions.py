@@ -4,7 +4,7 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.utils.prune as prune
 
-from torch_pruning_methods import *
+from norm_calculation_methods import *
 from pruning_utils import *
 import graph_algorithms as gru
 

@@ -118,7 +118,6 @@ def power_method(mat, n, iters=40):
     return max_val
 
 
-
 if __name__ == '__main__':
     run_operator_norm_test()
     
