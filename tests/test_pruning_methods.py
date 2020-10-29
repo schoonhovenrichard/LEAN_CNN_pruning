@@ -3,7 +3,6 @@ import numpy as np
 import random
 import pytest
 import msd_pytorch as mp
-from resnet_seg_model import ResNet50SegmentationModel
 
 def test_LEAN_indiv_MSD3x3(tries=10, eps=0.05):
     """Test whether LEAN pruning actually prunes 
@@ -31,7 +30,7 @@ def test_LEAN_indiv_MSD3x3(tries=10, eps=0.05):
         percentage = np.exp(np.log(perc)/float(nsteps))
         for step in range(nsteps):
             tot_perc *= percentage
-            model = lean.FourierSVD_LongPathMultiply_MSD_3x3(model, tot_perc, Redun=False, verbose=False)
+            model = lean.LEAN_SV_MSD_3x3(model, tot_perc, Redun=False, verbose=False)
             prune_frac = lean.fraction_pruned_convs_MSD3x3(model)[2]
 
         # Check if number of pruned convolutions is correct
@@ -67,7 +66,7 @@ def test_LEAN_indiv_MSD(tries=10, eps=0.05):
         percentage = np.exp(np.log(perc)/float(nsteps))
         for step in range(nsteps):
             tot_perc *= percentage
-            model = lean.FourierSVD_LongPathMultiply_MSD(model, tot_perc, Redun=False, verbose=False)
+            model = lean.LEAN_SV_MSD(model, tot_perc, Redun=False, verbose=False)
             prune_frac = lean.fraction_pruned_convs_MSD(model)[2]
 
         # Check if number of pruned convolutions is correct
@@ -99,7 +98,7 @@ def test_SV_indiv_MSD3x3(tries=10, eps=0.05):
         percentage = np.exp(np.log(perc)/float(nsteps))
         for step in range(nsteps):
             tot_perc *= percentage
-            model = lean.FourierSVD_Global_MSD_3x3(model, tot_perc, Redun=False, verbose=False)
+            model = lean.IndivSV_Global_MSD_3x3(model, tot_perc, Redun=False, verbose=False)
             prune_frac = lean.fraction_pruned_convs_MSD3x3(model)[2]
 
         # Check if number of pruned convolutions is correct
@@ -133,14 +132,12 @@ def test_SV_indiv_MSD(tries=10, eps=0.05):
         # Running fine-tuning pruning procedure
         tot_perc = 1.0
         percentage = np.exp(np.log(perc)/float(nsteps))
-        #print(perc, percentage, depth, c_in, num_labels, nsteps)
         for step in range(nsteps):
             tot_perc *= percentage
-            model = lean.FourierSVD_Global_MSD(model, tot_perc, Redun=False, verbose=False)
+            model = lean.IndivSV_Global_MSD(model, tot_perc, Redun=False, verbose=False)
             prune_frac = lean.fraction_pruned_convs_MSD(model)[2]
 
         # Check if number of pruned convolutions is correct
-        #print(abs((1-prune_frac-perc)/perc))
         assert abs((1-prune_frac-perc)/perc) < eps,"Test failed for SV finetuning!"
 
 def test_l1_indiv_MSD3x3(tries=10, eps=0.05):
@@ -169,7 +166,7 @@ def test_l1_indiv_MSD3x3(tries=10, eps=0.05):
         percentage = np.exp(np.log(perc)/float(nsteps))
         for step in range(nsteps):
             tot_perc *= percentage
-            model = lean.Ln_Global_MSD_3x3(model, tot_perc, Redun=False, verbose=False)
+            model = lean.IndivL1_Global_MSD_3x3(model, tot_perc, Redun=False, verbose=False)
             prune_frac = lean.fraction_pruned_convs_MSD3x3(model)[2]
 
         # Check if number of pruned convolutions is correct
@@ -205,7 +202,7 @@ def test_l1_indiv_MSD(tries=10, eps=0.05):
         percentage = np.exp(np.log(perc)/float(nsteps))
         for step in range(nsteps):
             tot_perc *= percentage
-            model = lean.Ln_Global_MSD(model, tot_perc, Redun=False, verbose=False)
+            model = lean.IndivL1_Global_MSD(model, tot_perc, Redun=False, verbose=False)
             prune_frac = lean.fraction_pruned_convs_MSD(model)[2]
 
         # Check if number of pruned convolutions is correct

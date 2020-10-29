@@ -1,4 +1,4 @@
-import graph_prune_utils as gu
+import graph_algorithms as gu
 import numpy as np
 import networkx as nx
 import random
