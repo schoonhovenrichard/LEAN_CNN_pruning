@@ -3,7 +3,7 @@ import numpy as np
 import random
 import pytest
 
-def test_operator_norm_power(tries=10, accept_error=0.05):
+def test_operator_norm_power(tries=20, accept_error=0.05):
     """Test computation of operator norm of convolution
         against the power method, which uses explicit
         repeated application of the convolution operator.

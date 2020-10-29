@@ -82,7 +82,7 @@ def test_longest_path_pruning(tries=10, n=70, p=0.5, eps=0.01):
         pratio = random.uniform(0.1, 0.99)
 
         tot_convs = (matrix != 0).sum()
-        pruned_mat = gu.longest_path_prune(matrix, pratio, 1, verbose=False)
+        pruned_mat = gu.longest_path_prune(matrix, pratio, verbose=False)
         actually_pruned_ratio = pruned_mat.sum()/float(tot_convs)
         assert abs(actually_pruned_ratio-pratio)/pratio < eps,"Unit test failed for longest path pruning!"
 
@@ -113,7 +113,7 @@ def test_longest_path_pruning_skip(tries=10, n=50, p=0.8, eps=0.01):
                         skips_mat[i,j] = True
 
         tot_convs = (matrix != 0).sum() - skips_mat.sum()
-        pruned_mat = gu.longest_path_prune(matrix, pratio, 1, skip_connection_matrix=skips_mat, verbose=False)
+        pruned_mat = gu.longest_path_prune(matrix, pratio, skip_connection_matrix=skips_mat, verbose=False)
         actually_pruned_ratio = pruned_mat.sum()/float(tot_convs)
         assert abs(actually_pruned_ratio-pratio)/pratio < eps,"Unit test failed for longest path pruning!"
 

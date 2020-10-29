@@ -10,10 +10,6 @@ import networkx as nx
 from analysis_utils import get_norm_histogram
 from analyze_masks import draw_adjacency_matrix
 
-#from unet_seg_model import UNetSegmentationModel
-#from resnet_seg_model import ResNetSegmentationModel
-
-#TODO: Add more docstrings
 
 def get_default_mask(modul, nam):
     orig = getattr(modul, nam)
@@ -456,7 +452,6 @@ def FourierSVD_LongPathMultiply_ResNet50(pmodel, tot_perc, batch=True, skip=True
     it = 0
     row_counts = []
     col_counts = []
-    #max_batchmult = 0
     for modul, nam in parameters_to_prune:
         row_counts.append(count_row)
         col_counts.append(count_col)
@@ -485,8 +480,6 @@ def FourierSVD_LongPathMultiply_ResNet50(pmodel, tot_perc, batch=True, skip=True
                 batch_mult = np.abs(bn_mults[chan].cpu().numpy())
                 batch_rvar = bn_rvar[chan].cpu().numpy()
                 batch_mult = batch_mult / np.sqrt(batch_rvar + eps)
-                #if batch_mult > max_batchmult:
-                #    max_batchmult = batch_mult
             for c_in in range(norms.shape[1]):
                 if it in downsample_idxs:
                     count_col_skip = col_counts[it-4]
@@ -507,20 +500,12 @@ def FourierSVD_LongPathMultiply_ResNet50(pmodel, tot_perc, batch=True, skip=True
                         norm_adjacency_matrix[count_row+chan,count_col+c_in] = norms[chan,c_in] * batch_mult
                     else:
                         norm_adjacency_matrix[count_row+chan,count_col+c_in] = norms[chan,c_in]
-        #print(it, norm_adjacency_matrix.max())
-        #print(np.where(norm_adjacency_matrix == np.amax(norm_adjacency_matrix)))
         count_row += norms.shape[0]
         count_col += norms.shape[1]
         it += 1
-    #print(max_batchmult)
-    #print(norm_adjacency_matrix.max())
-    #print(np.where(norm_adjacency_matrix == np.amax(norm_adjacency_matrix)))
-    #print(norm_adjacency_matrix[norm_adjacency_matrix != 0].size)
     print(norm_adjacency_matrix[norm_adjacency_matrix > 1].size)
-    #get_norm_histogram(norm_adjacency_matrix)
-    #draw_adjacency_matrix(norm_adjacency_matrix)
 
-    pruned = gru.longest_path_prune(norm_adjacency_matrix, perc, pmodel.c_in, skip_connection_matrix)
+    pruned = gru.longest_path_prune(norm_adjacency_matrix, perc, skip_connection_matrix)
     count_row = pmodel.c_in
     count_col = 0
     for modul, nam in parameters_to_prune:
@@ -799,7 +784,7 @@ def FourierSVD_LongPathMultiply_MSD(pmodel, tot_perc, Redun=True, ScaleDim=False
                 norm_adjacency_matrix[count,k] = norms[k]
         count += 1
 
-    pruned = gru.longest_path_prune(norm_adjacency_matrix, perc, pmodel.c_in)
+    pruned = gru.longest_path_prune(norm_adjacency_matrix, perc)
     it = pmodel.c_in
     for modul, nam in parameters_to_prune:
         orig = getattr(modul, nam)
@@ -1244,7 +1229,7 @@ def FourierSVD_LongPathMultiply_MSD_3x3(pmodel, tot_perc, Redun=True, ScaleDim=F
                 norm_adjacency_matrix[count,k] = norms[k]
         count += 1
 
-    pruned = gru.longest_path_prune(norm_adjacency_matrix, perc, pmodel.c_in)
+    pruned = gru.longest_path_prune(norm_adjacency_matrix, perc)
     it = pmodel.c_in
     for modul, nam in parameters_to_prune:
         orig = getattr(modul, nam)

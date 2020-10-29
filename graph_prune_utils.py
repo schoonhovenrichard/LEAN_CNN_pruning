@@ -5,12 +5,19 @@ from timeit import default_timer as timer
 import torch.nn as nn
 import torch.nn.utils.prune as prune
 import networkx as nx
-#import igraph as ig
-#import graph_tool.all as gt
 import warnings
 import copy
 
 def dag_longest_path_nx_mult(G, matrix):
+    r"""This is one of the helper functions to test the correctness
+        of the computationally efficient variant of the longest
+        multiplicative path algorithm. This implementation uses
+        topological sort from NetworkX but performs the DP itself.
+
+    Args:
+        - G (networkX.DiGraph): Input graph.
+        - matrix (np.ndarray): Associated adjacency matrix.
+    """
     if not G:
         return []
     if not G.is_directed():
@@ -52,7 +59,164 @@ def dag_longest_path_nx_mult(G, matrix):
         warnings.warn("A single node path was returned, this is either due to the graph having no edges or to the graph having only negative weight edges.")
     return path
 
-### Next comes low-level implementation for performance purposes
+
+def dag_longest_path_mult(matrix: np.ndarray):
+    r"""This is a low-level, computationally efficient implementation
+        of dag_longest_path_nx_mult (longest multiplicative path 
+        algorithm). It only uses numpy arrays, and numba.jit for speedup.
+        
+        NOTE: This implementation has no safeguards to check for
+                the DAG proprety.
+
+    Args:
+        - matrix (np.ndarray): Adjacency matrix of graph.
+    """
+    n = matrix.shape[0]
+    # Efficiently compute predecessors and descendants of nodes.
+    preds, descs = row_col_idx_nonzero_nb(matrix)
+
+    # Efficiently determine topological order
+    topo_order = []
+    indegree_map = []
+    for v in range(len(preds)):
+        indegree_map.append(preds[v].shape[0])
+    indegree_map = np.array(indegree_map)
+    zero_indegree = [v for v in range(len(preds)) if preds[v].size == 0]
+    while zero_indegree:
+        node = zero_indegree.pop()
+        children = descs[node]
+        indegree_map[children] -= 1
+        zero_indegree += list(children[np.where(indegree_map[children] == 0)[0]])
+        topo_order.append(node)
+
+    # Do the dynamic programming to figure out longest path
+    dss = matrix.transpose()
+    distancesDP = np.zeros(shape=(n,2),dtype=np.float64)
+    for v in topo_order:
+        predv = preds[v]
+        maxu = (0,v)
+        if len(predv) > 0:
+            dssv = dss[v][predv]
+            distancesv = distancesDP[predv,0]
+            ds = dssv * distancesv # This is different because multiplicative
+            ds[distancesv == 0] = dssv[distancesv == 0]
+            ux = np.argmax(ds)
+            maxu = (ds[ux],predv[ux])
+        if maxu[0] >= 1:
+            distancesDP[v][0] = maxu[0]
+            distancesDP[v][1] = maxu[1]
+        else:
+            distancesDP[v][0] = 0
+            distancesDP[v][1] = v
+    
+    # Return the longest multiplicative path
+    u = -1
+    v = int(np.argmax(distancesDP[:,0]))
+    path = []
+    while u != v:
+        path.append(v)
+        u = v
+        v = int(distancesDP[v][1])
+    path.reverse()
+    return np.array(path)
+
+
+def longest_path_prune(norm_adj_matrix, perc, skip_connection_matrix=None, verbose=False):
+    r"""Given an adjacency matrix of the network graph, returns a boolean array
+        of nodes to be pruned by keeping the longest value path.
+
+    Args:
+        - norm_adj_matrix (np.ndarray): Adjacency matrix describing the CNN
+            graph as a DAG. The metrics/norms of the convolutions are given
+            on the edges.
+        - perc (float): fraction of convolutions to be pruned in this pass,
+            e.g. 0.2 means that 20% of the convolutions will be removed. 
+            This means we will extract longest multiplicative paths until we 
+            have extracted 80% of the nodes in the graph.
+        - c_in (int): Number of input channels to the CNN. #TODO: REMOVE
+        - skip_connection_matrix (np.ndarray (bool)): Matrix of booleans
+            with True when an edge represents an unprunable skip connection.
+        - verbose (bool): Algorithm is silent, or prints progress reports.
+    """
+    adj_matrix = norm_adj_matrix.copy()
+    pruned = np.ones(shape=(adj_matrix.shape[0], adj_matrix.shape[1]),dtype=np.uint8)
+    pruned[adj_matrix == 0] = 0
+    tot_convs = (adj_matrix != 0).sum()
+    if skip_connection_matrix is not None:
+        tot_convs -= skip_connection_matrix.sum()
+        pruned[skip_connection_matrix] = 0
+    if pruned.sum() != tot_convs:
+        print(pruned.sum(), tot_convs, (adj_matrix != 0).sum(), skip_connection_matrix is None)
+        raise Exception("Investigate this")
+    convs_pruned = pruned.sum()/float(tot_convs)
+    count_single_edge_paths = 0
+    count_pruned = 0
+    convs_to_prune = perc*tot_convs
+    if verbose:
+        print("Convolution to prune:", convs_to_prune,", percentage", perc)
+    while convs_pruned > perc:
+        prune_path = dag_longest_path_mult(adj_matrix)
+        full_skip_path = True
+        for k in range(len(prune_path)-1):
+            nstart = prune_path[k]
+            nend = prune_path[k+1]
+            if skip_connection_matrix is not None:
+                if not skip_connection_matrix[nstart,nend]:
+                    full_skip_path = False
+                    if pruned[nstart,nend] == 0:
+                        raise Exception("Should already be pruned, how was it still in the graph?")
+                    pruned[nstart,nend] = 0
+                    adj_matrix[nstart,nend] = 0
+                    count_pruned += 1
+                    convs_pruned = pruned.sum()/float(tot_convs)
+            else:
+                if pruned[nstart,nend] == 0:
+                    raise Exception("Should already be pruned, how was it still in the graph?")
+                pruned[nstart,nend] = 0
+                adj_matrix[nstart,nend] = 0
+                count_pruned += 1
+                convs_pruned = pruned.sum()/float(tot_convs)
+            if convs_pruned <= perc:
+                break
+            if verbose:
+                print('{}\r'.format(convs_pruned), end="")
+
+        if full_skip_path and skip_connection_matrix is not None:
+            if verbose:
+                print("BREAKING OUT because have found only a path consisting of skip connections.")
+            break
+        if len(prune_path) == 2:
+            count_single_edge_paths += 1
+        else:
+            count_single_edge_paths = 0
+        if count_single_edge_paths >= 1000:
+            if verbose:
+                print("BREAKING OUT because been removing consecutive single edge paths")
+            break
+        if len(prune_path) == 1:
+            if verbose:
+                print("BREAKING OUT because only negative weights in edges left.")
+            break
+
+    if verbose:
+        print("Convolution to prune:", convs_to_prune, "Kept {0} with path method, {1:.4f}%".format(count_pruned, 100*count_pruned/float(tot_convs - convs_to_prune)), count_pruned)
+    # Need to switch off the skip connections again when computing threshold
+    if skip_connection_matrix is not None:
+        adj_matrix[skip_connection_matrix] = 0
+    if convs_pruned > perc:
+        # Found many consecutive single edge paths, do the rest of the pruning by efficient edge pruning
+        all_norms = adj_matrix[adj_matrix!=0].copy().flatten()
+        reduction_perc = perc/float(convs_pruned)
+        threshold = np.percentile(all_norms, 100*reduction_perc)
+        pruned[adj_matrix >= threshold] = 0
+    convs_priuned = pruned.sum()/float(tot_convs)
+    if verbose:
+        print(convs_pruned, pruned.sum(), convs_to_prune)
+    return pruned
+
+###################################################################
+### Next comes low-level implementation for performance purposes###
+###################################################################
 
 def argmax(iterable):
     return max(enumerate(iterable), key=lambda x: x[1])[0]
@@ -159,148 +323,3 @@ def row_col_idx_sparse_coo(arr):
     return (
         np.split(csc_mat.indices, csc_mat.indptr)[1:-1],
         np.split(csr_mat.indices, csr_mat.indptr)[1:-1],)
-
-def dag_longest_path_mult(matrix: np.ndarray):
-    ### This is a low-level version of dag_longest_path_nx_mult, it does not check for DAG property
-    #start1 = timer()
-    n = matrix.shape[0]
-    #preds, descs = row_col_idx_sep(matrix)
-    #preds, descs = row_col_idx_sparse_lil(matrix)
-    #preds, descs = row_col_idx_zip(matrix)
-    #preds, descs = row_col_idx_sparse_coo(matrix)
-    preds, descs = row_col_idx_nonzero_nb(matrix)
-    #end1 = timer()
-    #print("Precompute", 1000*(end1-start1))
-
-    ### Determine topological order
-    #start3 = timer()
-    topo_order = []
-    indegree_map = []
-    for v in range(len(preds)):
-        indegree_map.append(preds[v].shape[0])
-    indegree_map = np.array(indegree_map)
-    zero_indegree = [v for v in range(len(preds)) if preds[v].size == 0]
-    while zero_indegree:
-        node = zero_indegree.pop()
-        children = descs[node]
-        indegree_map[children] -= 1
-        zero_indegree += list(children[np.where(indegree_map[children] == 0)[0]])
-        topo_order.append(node)
-    #end3 = timer()
-    #print("Topo sort",1000*(end3-start3))
-
-    # Do the dynamic programming to figure out longest path
-    #start = timer()
-    dss = matrix.transpose()
-    distancesDP = np.zeros(shape=(n,2),dtype=np.float64)
-    for v in topo_order:
-        predv = preds[v]
-        maxu = (0,v)
-        if len(predv) > 0:
-            dssv = dss[v][predv]
-            distancesv = distancesDP[predv,0]
-            ds = dssv * distancesv
-            ds[distancesv == 0] = dssv[distancesv == 0]
-            ux = np.argmax(ds)
-            maxu = (ds[ux],predv[ux])
-        if maxu[0] >= 1:
-            distancesDP[v][0] = maxu[0]
-            distancesDP[v][1] = maxu[1]
-        else:
-            distancesDP[v][0] = 0
-            distancesDP[v][1] = v
-    #end = timer()
-    #print("Dynamic programming",1000*(end-start))
-
-    #start2 = timer()
-    u = -1
-    v = int(np.argmax(distancesDP[:,0]))
-    path = []
-    while u != v:
-        path.append(v)
-        u = v
-        v = int(distancesDP[v][1])
-    path.reverse()
-    #end2 = timer()
-    #print("Collecting path:",1000*(end2-start2))
-    return np.array(path)
-
-def longest_path_prune(norm_adj_matrix, perc, c_in, skip_connection_matrix=None, verbose=False):
-    r"""Given an adjacency matrix of the network graph, returns a boolean array
-    of nodes to be pruned by keeping the longest value path.
-    """
-    adj_matrix = norm_adj_matrix.copy()
-    pruned = np.ones(shape=(adj_matrix.shape[0], adj_matrix.shape[1]),dtype=np.uint8)
-    pruned[adj_matrix == 0] = 0
-    tot_convs = (adj_matrix != 0).sum()
-    if skip_connection_matrix is not None:
-        tot_convs -= skip_connection_matrix.sum()
-        pruned[skip_connection_matrix] = 0
-    if pruned.sum() != tot_convs:
-        print(pruned.sum(), tot_convs, (adj_matrix != 0).sum(), skip_connection_matrix is None)
-        raise Exception("Investigate this")
-    convs_pruned = pruned.sum()/float(tot_convs)
-    count_single_edge_paths = 0
-    count_pruned = 0
-    convs_to_prune = perc*tot_convs
-    if verbose:
-        print("Convolution to prune:", convs_to_prune,", percentage", perc)
-    while convs_pruned > perc:
-        prune_path = dag_longest_path_mult(adj_matrix)
-        full_skip_path = True
-        for k in range(len(prune_path)-1):
-            nstart = prune_path[k]
-            nend = prune_path[k+1]
-            if skip_connection_matrix is not None:
-                if not skip_connection_matrix[nstart,nend]:
-                    full_skip_path = False
-                    if pruned[nstart,nend] == 0:
-                        raise Exception("Should already be pruned, how was it still in the graph?")
-                    pruned[nstart,nend] = 0
-                    adj_matrix[nstart,nend] = 0
-                    count_pruned += 1
-                    convs_pruned = pruned.sum()/float(tot_convs)
-            else:
-                if pruned[nstart,nend] == 0:
-                    raise Exception("Should already be pruned, how was it still in the graph?")
-                pruned[nstart,nend] = 0
-                adj_matrix[nstart,nend] = 0
-                count_pruned += 1
-                convs_pruned = pruned.sum()/float(tot_convs)
-            if convs_pruned <= perc:
-                break
-            if verbose:
-                print('{}\r'.format(convs_pruned), end="")
-
-        if full_skip_path and skip_connection_matrix is not None:
-            if verbose:
-                print("BREAKING OUT because have found only a path consisting of skip connections.")
-            break
-        if len(prune_path) == 2:
-            count_single_edge_paths += 1
-        else:
-            count_single_edge_paths = 0
-        if count_single_edge_paths >= 1000:
-            if verbose:
-                print("BREAKING OUT because been removing consecutive single edge paths")
-            break
-        if len(prune_path) == 1:
-            if verbose:
-                print("BREAKING OUT because only negative weights in edges left.")
-            break
-
-    if verbose:
-        print("Convolution to prune:", convs_to_prune, "Kept {0} with path method, {1:.4f}%".format(count_pruned, 100*count_pruned/float(tot_convs - convs_to_prune)), count_pruned)
-    # Need to switch off the skip connections again when computing threshold
-    if skip_connection_matrix is not None:
-        adj_matrix[skip_connection_matrix] = 0
-    if convs_pruned > perc:
-        # Found many consecutive single edge paths, do the rest of the pruning by efficient edge pruning
-        all_norms = adj_matrix[adj_matrix!=0].copy().flatten()
-        reduction_perc = perc/float(convs_pruned)
-        threshold = np.percentile(all_norms, 100*reduction_perc)
-        pruned[adj_matrix >= threshold] = 0
-    convs_priuned = pruned.sum()/float(tot_convs)
-    if verbose:
-        print(convs_pruned, pruned.sum(), convs_to_prune)
-    return pruned
