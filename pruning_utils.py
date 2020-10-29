@@ -1,7 +1,8 @@
 import torch
 
-
 def get_default_mask(modul, nam):
+    r"""Retrieve the current pruned mask of a module.
+    """
     orig = getattr(modul, nam)
     try:
         default_mask = getattr(modul, nam + "_mask").detach().clone(memory_format=torch.contiguous_format)
@@ -10,8 +11,7 @@ def get_default_mask(modul, nam):
     return default_mask
 
 def fraction_pruned_convs_ResNet50(model):
-    r"""
-    Return the fraction of pruned convs of ResNet50 model.
+    r"""Return the fraction of pruned convs of ResNet50 model.
     """
     conv_masks = get_conv_masks_ResNet50(model)
     tot_conv = 0
@@ -24,8 +24,7 @@ def fraction_pruned_convs_ResNet50(model):
     return (pp, tot_conv, pp/float(tot_conv))
 
 def fraction_pruned_convs_MSD(model):
-    r"""
-    Return the fraction of pruned convs of MSD model.
+    r"""Return the fraction of pruned convs of MSD model.
     """
     conv_masks = get_conv_masks_MSD(model)
     tot_conv = 0
@@ -43,8 +42,8 @@ def fraction_pruned_convs_MSD(model):
     return (pp, tot_conv, pp/float(tot_conv))
 
 def fraction_pruned_convs_MSD3x3(model):
-    r"""
-    Return the fraction of pruned convs of MSD model.
+    r"""Return the fraction of pruned convs of MSD model,
+        excluding the final layer.
     """
     conv_masks = get_conv_masks_MSD3x3(model)
     tot_conv = 0
@@ -57,6 +56,9 @@ def fraction_pruned_convs_MSD3x3(model):
     return (pp, tot_conv, pp/float(tot_conv))
 
 def pruned_before_ResNet50(model):
+    r"""Check if FCN-ResNet50 has been pruned before
+        by checking the buffer for masks.
+    """
     pruned_before = False
     mod1 = model.msd.backbone
     mod2 = model.msd.classifier
@@ -71,6 +73,9 @@ def pruned_before_ResNet50(model):
     return pruned_before
 
 def pruned_before_MSD(model):
+    r"""Check if MS-D model has been pruned before
+        by checking the buffer for masks.
+    """
     pruned_before = False
     mod = model.msd.msd_block
     for x in mod.named_buffers():
@@ -83,6 +88,8 @@ def pruned_before_MSD(model):
 ### Functions to get conv-layers, masks etc.:
 
 def get_convs_MSD(model):
+    r"""Retrieve list of convolutional layers in MS-D network.
+    """
     mod = model.msd.msd_block
     convolutions = []
     for k in range(model.depth):
@@ -92,6 +99,8 @@ def get_convs_MSD(model):
     return convolutions
 
 def get_conv_masks_MSD(model):
+    r"""Get list of convolution masks for MS-D network.
+    """
     mod = model.msd.msd_block
     convolution_masks = []
     for k in range(model.depth):
@@ -101,6 +110,9 @@ def get_conv_masks_MSD(model):
     return convolution_masks
 
 def get_conv_masks_MSD3x3(model):
+    r"""Get list of convolution masks for MS-D network,
+        excluding the final layer.
+    """
     mod = model.msd.msd_block
     convolution_masks = []
     for k in range(model.depth):
@@ -109,6 +121,8 @@ def get_conv_masks_MSD3x3(model):
     return convolution_masks
 
 def get_convs_ResNet50(model):
+    r"""Get list of convolution layers for FCN-ResNet50.
+    """
     mod1 = model.msd.backbone
     mod2 = model.msd.classifier
     convolutions = [
@@ -171,6 +185,8 @@ def get_convs_ResNet50(model):
     return convolutions
 
 def get_batchnorms_ResNet50(model):
+    r"""Get list of batchnormalization layer for FCN-ResNet50.
+    """
     mod1 = model.msd.backbone
     mod2 = model.msd.classifier
     batchnorms = [
@@ -233,6 +249,8 @@ def get_batchnorms_ResNet50(model):
     return batchnorms
 
 def get_conv_masks_ResNet50(model):
+    r"""Get list of convolution masks for FCN-ResNet50.
+    """
     mod1 = model.msd.backbone
     mod2 = model.msd.classifier
     conv_masks = [
