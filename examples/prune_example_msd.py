@@ -45,6 +45,7 @@ if __name__ == '__main__':
     print("Done estimating normalization parameters")
 
     # Load pre-trained network
+    # User can train their own but we have pre-supplied one
     model.load("trained_models/msd_network_d=50_epoch_47.torch")
 
     # Accuracy of base model:
@@ -73,7 +74,7 @@ if __name__ == '__main__':
                 train_error = model.validate(train_dl)
                 print(f"{epoch:05} Training error: {train_error: 0.6f}")
             acc = get_global_accuracy(model, test_dl)
-            model.save("pruned_models/msd_network_LEAN_d={0}_ratio={1:.4f}_acc={2:.4f}.torch".format(depth, tot_perc, acc), epoch)
+            model.save("pruned_models/msd_network2_LEAN_d={0}_ratio={1:.4f}_acc={2:.4f}.torch".format(depth, tot_perc, acc), epoch)
     if indivL1_pruning:
         tot_perc = 1.0
         print("Starting individual filter pruning (L1) pruning")
@@ -86,7 +87,7 @@ if __name__ == '__main__':
                 train_error = model.validate(train_dl)
                 print(f"{epoch:05} Training error: {train_error: 0.6f}")
             acc = get_global_accuracy(model, test_dl)
-            model.save("pruned_models/msd_network_indivL1_d={0}_ratio={1:.4f}_acc={2:.4f}.torch".format(depth, tot_perc, acc), epoch)
+            model.save("pruned_models/msd_network2_indivL1_d={0}_ratio={1:.4f}_acc={2:.4f}.torch".format(depth, tot_perc, acc), epoch)
     if indivSV_pruning:
         tot_perc = 1.0
         print("Starting individual filter pruning (SV) pruning")
@@ -99,4 +100,4 @@ if __name__ == '__main__':
                 train_error = model.validate(train_dl)
                 print(f"{epoch:05} Training error: {train_error: 0.6f}")
             acc = get_global_accuracy(model, test_dl)
-            model.save("pruned_models/msd_network_indivSV_d={0}_ratio={1:.4f}_acc={2:.4f}.torch".format(depth, tot_perc, acc), epoch)
+            model.save("pruned_models/msd_network2_indivSV_d={0}_ratio={1:.4f}_acc={2:.4f}.torch".format(depth, tot_perc, acc), epoch)
