@@ -2,13 +2,12 @@ import torch
 import msd_pytorch as mp
 from torch.utils.data import DataLoader
 import numpy as np
-from timeit import default_timer as timer
 import torch.nn as nn
 import torch.nn.utils.prune as prune
-import math
-import random
+#import math
+#import random
 import scipy.linalg
-import scipy.sparse
+#import scipy.sparse
 
 def fourier_operatornorm(kern, n, order):
     r"""Computes the FFT of the filter matrix to efficiently 

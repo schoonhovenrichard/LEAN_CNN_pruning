@@ -1,4 +1,4 @@
-import model_pruning_functions as lean
+import pruning_algorithms as lean
 import numpy as np
 import random
 import pytest

@@ -1,12 +1,9 @@
 import torch
 import msd_pytorch as mp
 import numpy as np
-from timeit import default_timer as timer
 import torch.nn as nn
 import torch.nn.utils.prune as prune
 import networkx as nx
-import warnings
-import copy
 
 def dag_longest_path_nx_mult(G, matrix):
     r"""This is one of the helper functions to test the correctness
@@ -55,8 +52,6 @@ def dag_longest_path_nx_mult(G, matrix):
         u = v
         v = int(dist2[v][1])
     path.reverse()
-    if len(path) == 1:
-        warnings.warn("A single node path was returned, this is either due to the graph having no edges or to the graph having only negative weight edges.")
     return path
 
 
