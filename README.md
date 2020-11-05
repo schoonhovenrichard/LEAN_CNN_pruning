@@ -46,7 +46,7 @@ python train_example_msd.py
 
 Currently the depth of the network is set to 50 so as to have a high-performing network, yet not to expensive to train. These parametes can be changed in the script
 
-### Run pruning tests
+### Run pruning experiments
 To run pruning experiments on the trained MS-D network, run:
 ```
 python prune_example_msd.py
@@ -68,10 +68,12 @@ to run the test. This will e.g. generate random DAGs to test the longest path al
 * **Kees Joost Batenburg** - (https://www.cwi.nl/people/joost-batenburg)
 
 ## Articles
+<!---
 <a id="1">[1]</a> 
 Thierens, Dirk (2010).
 The linkage tree genetic algorithm.
 International Conference on Parallel Problem Solving from Nature. Springer, Berlin, Heidelberg, 2010.
+-->
 
 ## License
 
