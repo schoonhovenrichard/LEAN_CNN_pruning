@@ -4,7 +4,6 @@ import numpy as np
 import pathlib
 
 import pruning_algorithms as lean
-#from pruning_algorithms import LEAN_SV_MSD_3x3
 from train_example_msd import get_global_accuracy
 
 if __name__ == '__main__':
