@@ -1,10 +1,28 @@
-# EvoPy: Python library for evolutionary optimization
+# LEAN: Graph-based pruning for CNNs by extracting longest chains
 
-## Dependencies
-**EvoPy** requires the following packages to function:
-- bitarray
-``` shell
-conda install -c anaconda bitarray 
+This repository contains Python scripts for performing LEAN pruning (and the methods it is compared against). The algorithms to run the chain extraction on the graph, and to compute the operator norm are generally applicable. In addition, functions are supplied to prune the MS-D and FCN-ResNet50 architectures.
+
+Example training data, trained MS-D nets, and pruned MS-D nets are supplied in the `examples` folder. However, scripts are provided to generate this data from scratch.
+
+Paper:
+TODO: LINK HERE
+
+## Installation
+To install the package, please run
+
+1. Clone the git repository
+```
+git clone https://github.com/schoonhovenrichard/LEAN_CNN_pruning
+```
+2. Move the the directory: `cd LEAN_CNN_pruning`.
+3. Create conda environment with the required packages using the supplied environment file:
+```
+conda env create -f environment.yml
+```
+4. Activate the environment: `conda activate LEAN_CNN_pruning`
+5. Install the packages: 
+```
+pip install -e .
 ```
 
 ## Features
