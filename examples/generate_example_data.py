@@ -1,18 +1,3 @@
-#-----------------------------------------------------------------------
-# NOTE: This file was adapted from http://dmpelt.github.io/msdnet/
-#       to generate quick training data.
-#
-#Copyright 2019 Centrum Wiskunde & Informatica, Amsterdam
-#
-#Author: Daniel M. Pelt
-#Contact: D.M.Pelt@cwi.nl
-#Website: http://dmpelt.github.io/msdnet/
-#License: MIT
-#
-#This file is part of MSDNet, a Python implementation of the
-#Mixed-Scale Dense Convolutional Neural Network.
-#-----------------------------------------------------------------------
-
 import imageio
 import numpy as np
 import tifffile
@@ -56,10 +41,10 @@ def generate():
     return imn, im, l
 
 pth = Path('data/train')
-pth.mkdir(exist_ok=True)
-(pth / 'noisy').mkdir(exist_ok=True)
-(pth / 'noiseless').mkdir(exist_ok=True)
-(pth / 'label').mkdir(exist_ok=True)
+pth.mkdir(parents=True, exist_ok=True)
+(pth / 'noisy').mkdir(parents=True, exist_ok=True)
+(pth / 'noiseless').mkdir(parents=True, exist_ok=True)
+(pth / 'label').mkdir(parents=True, exist_ok=True)
 for i in range(500):
     imn, im, l = generate()
     imageio.imsave(pth / 'noisy' / '{:05d}.tiff'.format(i), imn.astype(np.float32))
@@ -67,10 +52,10 @@ for i in range(500):
     imageio.imsave(pth / 'label' / '{:05d}.tiff'.format(i), l.astype(np.uint8))
     
 pth = Path('data/val')
-pth.mkdir(exist_ok=True)
-(pth / 'noisy').mkdir(exist_ok=True)
-(pth / 'noiseless').mkdir(exist_ok=True)
-(pth / 'label').mkdir(exist_ok=True)
+pth.mkdir(parents=True, exist_ok=True)
+(pth / 'noisy').mkdir(parents=True, exist_ok=True)
+(pth / 'noiseless').mkdir(parents=True, exist_ok=True)
+(pth / 'label').mkdir(parents=True, exist_ok=True)
 for i in range(100):
     imn, im, l = generate()
     imageio.imsave(pth / 'noisy' / '{:05d}.tiff'.format(i), imn.astype(np.float32))
@@ -78,10 +63,10 @@ for i in range(100):
     imageio.imsave(pth / 'label' / '{:05d}.tiff'.format(i), l.astype(np.uint8))
     
 pth = Path('data/test')
-pth.mkdir(exist_ok=True)
-(pth / 'noisy').mkdir(exist_ok=True)
-(pth / 'noiseless').mkdir(exist_ok=True)
-(pth / 'label').mkdir(exist_ok=True)
+pth.mkdir(parents=True, exist_ok=True)
+(pth / 'noisy').mkdir(parents=True, exist_ok=True)
+(pth / 'noiseless').mkdir(parents=True, exist_ok=True)
+(pth / 'label').mkdir(parents=True, exist_ok=True)
 for i in range(50):
     imn, im, l = generate()
     imageio.imsave(pth / 'noisy' / '{:05d}.tiff'.format(i), imn.astype(np.float32))

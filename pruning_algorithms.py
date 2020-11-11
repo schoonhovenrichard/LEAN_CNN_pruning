@@ -737,6 +737,7 @@ def IndivSV_Global_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=False):
 ###  Pruning auxiliary functions for batch-norm, redundancy etc. below ###
 ##########################################################################
 
+
 def prune_biases_MSD(model):
     r"""
     Prune biases in MS-D model layers if the entire layer is pruned.

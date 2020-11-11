@@ -209,9 +209,11 @@ def longest_path_prune(norm_adj_matrix, perc, skip_connection_matrix=None, verbo
         print(convs_pruned, pruned.sum(), convs_to_prune)
     return pruned
 
+
 ###################################################################
 ### Next comes low-level implementation for performance purposes###
 ###################################################################
+
 
 def argmax(iterable):
     return max(enumerate(iterable), key=lambda x: x[1])[0]

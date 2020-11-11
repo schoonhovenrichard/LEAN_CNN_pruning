@@ -120,14 +120,7 @@ def power_method(mat, n, iters=40):
 
 if __name__ == '__main__':
     run_operator_norm_test()
-    
     N = 32
-    #mat = np.array([[ 0.6517,  0.7637,  0.3560],
-    #        [ 1.8497, -3.3352, -0.0926],
-    #        [ 1.0303, -1.1776,  0.0818]])
-    #print(fourier_operatornorm(mat, N))
-    #print(operatornorm_bigH(mat, N, N, 2))
-    #print(power_method(mat, N))
 
     test_power_method = False
     if test_power_method:

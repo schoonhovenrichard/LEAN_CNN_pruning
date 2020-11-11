@@ -4,10 +4,8 @@ from torch.utils.data import DataLoader
 import numpy as np
 import torch.nn as nn
 import torch.nn.utils.prune as prune
-#import math
-#import random
 import scipy.linalg
-#import scipy.sparse
+
 
 def fourier_operatornorm(kern, n, order):
     r"""Computes the FFT of the filter matrix to efficiently 

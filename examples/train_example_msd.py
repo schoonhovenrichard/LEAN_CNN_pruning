@@ -1,7 +1,3 @@
-"""
-Adapted from:
-    https://github.com/ahendriksen/msd_pytorch
-"""
 import torch
 import msd_pytorch as mp
 from torch.utils.data import DataLoader
