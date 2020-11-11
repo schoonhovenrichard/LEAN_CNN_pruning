@@ -2,13 +2,13 @@
 
 This folder contains supplementary code and data for performing **LEAN** pruning (and the methods it is compared against). The folder contains tests to check the validity of certain algorithms, and example code for the user to test LEAN themselves. 
 
-Here, we have supplied functions to prune the MS-D and FCN-ResNet50 architectures. However, the algorithms to extract paths from the graph, and to compute the operator norm, are generally applicable to any CNN. To run LEAN for different architectures the user needs to write a custom pruning function for that model. Some guidelines to write custom LEAN pruning functions are given below in 'LEAN pruning for other models'.
+Here, we have supplied functions to prune the MS-D and FCN-ResNet50 architectures. However, the algorithms to extract paths from the graph, and to compute the operator norm, are generally applicable to any CNN. To run LEAN for different architectures the user needs to write a custom pruning function for that model. Some guidelines to write custom LEAN pruning functions are given below in *LEAN pruning for other models*.
 
 Paper:
 **TODO:** LINK HERE
 
 ## Installation instructions
-To install the package, please run
+To install the package, please
 
 1. Move to the main directory.
 2. Create conda environment with the required packages using the supplied environment file:
@@ -34,7 +34,9 @@ while running certain examples, this is possibly because the step `pip install -
 
 
 ## Running tests
-In addition to the supplied examples, the repository contains tests to check the validity of certain algorithms. Move to the `tests` directory and run
+In addition to the supplied examples, the repository contains tests to check the validity of certain algorithms. 
+
+1. Move to the `tests` directory and run
 ```
 py.test
 ```
@@ -48,11 +50,10 @@ For anyone interested in repeating experiments using LEAN, the following describ
 ```
 cd examples
 ```
-**Note:** There is already a pretrained network supplied so the reader can decide to skip the 'Train an MS-D network step' and use the pretrained network in the `trained_models` folder. In the `pruned_models` folder, example pruned networks are given from an experimental run are given.
+**Note:** There is already a pretrained network supplied so the reader can decide to skip the *Train an MS-D network* step and use the pretrained network in the `trained_models` folder. In the `pruned_models` folder, example pruned networks from an experimental run are given.
 
 
 ### Generate new training data
-**Note:** Due to size limitations of this .zip file, users need to generate their own training data.
 
 2. To generate new data in the `data` directory, run:
 ```
