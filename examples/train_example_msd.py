@@ -1,3 +1,5 @@
+### CVPR 2021 Submission #8167. Confidential review copy. Do not distribute.
+
 import torch
 import msd_pytorch as mp
 from torch.utils.data import DataLoader
@@ -21,15 +23,26 @@ def get_global_accuracy(model, test_dl):
     return float(correct/float(total))
 
 if __name__ == '__main__':
-    # The number of input channels of the MSD network
-    c_in = 1
+    ### USER CONFIGURABLE PARAMETERS
+
     # The depth of the MSD network. Good values range between 30 and 200.
     depth = 50
-    # The width of the MSD network. A value of 1 is recommended.
-    width = 1
     # The dilation scheme to use for the MSD network. The default is [1,
     # 2, ..., 10], but [1, 2, 4, 8] is good too.
     dilations = [1,2,3,4,5,6,7,8,9,10]
+    # The number of epochs to train for
+    epochs = 50
+    # The mini-batch size used in training.
+    batch_size = 5
+
+    ### END OF USER CONFIGURABLE PARAMETERS
+
+    # The number of input channels of the MSD network
+    c_in = 1
+    # The width of the MSD network. A value of 1 is recommended.
+    width = 1
+    # The labels to be assigned to the objects
+    labels = [0, 1, 2, 3, 4]
 
     path = str(pathlib.Path().absolute()) + '/data/'
     train_input_glob = path+"train/noisy/*.tiff"
@@ -37,12 +50,6 @@ if __name__ == '__main__':
     val_input_glob = path+"val/noisy/*.tiff"
     val_target_glob = path+"val/label/*.tiff"
 
-    # The labels to be assigned to the objects
-    labels = [0, 1, 2, 3, 4]
-    # The number of epochs to train for
-    epochs = 50
-    # The mini-batch size used in training.
-    batch_size = 5
 
     print("Load training dataset")
     train_ds = mp.ImageDataset(train_input_glob, train_target_glob, labels=labels)
@@ -65,31 +72,17 @@ if __name__ == '__main__':
     best_validation_error = np.inf
     validation_error = 0.0
 
-    train_new_net = False
-    if train_new_net:
-        for epoch in range(epochs):
-            # Train
-            model.train(train_dl, 1)
-            # Compute training error
-            train_error = model.validate(train_dl)
-            print(f"{epoch:05} Training error: {train_error: 0.6f}")
-            # Compute validation error
-            if val_dl is not None:
-                validation_error = model.validate(val_dl)
-                print(f"{epoch:05} Validation error: {validation_error: 0.6f}")
-            # Save network if worthwile
-            if validation_error < best_validation_error or val_dl is None:
-                best_validation_error = validation_error
-                model.save(f"trained_models/msd_network_d={0}_epoch_{1}.torch".format(depth, epoch), epoch)
-
-    # The parameters can be reloaded again:
-    model.load("trained_models/msd_network_d=50_epoch_47.torch")
-
-    # Test on test set
-    test_input_glob = path+"test/noisy/*.tiff"
-    test_target_glob = path+"test/label/*.tiff"
-
-    test_ds = mp.ImageDataset(test_input_glob, test_target_glob, labels=labels)
-    test_dl = DataLoader(test_ds, 1, shuffle=False)
-
-    acc = get_global_accuracy(model, test_dl)
+    for epoch in range(epochs):
+        # Train
+        model.train(train_dl, 1)
+        # Compute training error
+        train_error = model.validate(train_dl)
+        print(f"{epoch:05} Training error: {train_error: 0.6f}")
+        # Compute validation error
+        if val_dl is not None:
+            validation_error = model.validate(val_dl)
+            print(f"{epoch:05} Validation error: {validation_error: 0.6f}")
+        # Save network if worthwile
+        if validation_error < best_validation_error or val_dl is None:
+            best_validation_error = validation_error
+            model.save(f"trained_models/msd_network_d={0}_epoch_{1}.torch".format(depth, epoch), epoch)

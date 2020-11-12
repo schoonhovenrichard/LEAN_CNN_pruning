@@ -1,3 +1,5 @@
+### CVPR 2021 Submission #8167. Confidential review copy. Do not distribute.
+
 import imageio
 import numpy as np
 import tifffile

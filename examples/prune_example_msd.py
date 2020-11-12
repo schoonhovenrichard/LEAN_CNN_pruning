@@ -1,3 +1,5 @@
+### CVPR 2021 Submission #8167. Confidential review copy. Do not distribute.
+
 import msd_pytorch as mp
 from torch.utils.data import DataLoader
 import numpy as np
@@ -7,10 +9,31 @@ import pruning_algorithms as lean
 from train_example_msd import get_global_accuracy
 
 if __name__ == '__main__':
-    c_in = 1
+    ### USER CONFIGURABLE PARAMETERS
+
+    # Choose which pruning procedure to run
+    lean_pruning = True
+    indivL1_pruning = False
+    indivSV_pruning = False
+
+    # Set the pruning ratio, and fine-tuning parameters
+    perc = 0.05
+    nsteps = 15
+    retraining_epochs = 3
+
+    ### IMPORTANT: These parameters MUST be set to the same values as in train_example_msd.py
     depth = 50
-    width = 1
     dilations = [1,2,3,4,5,6,7,8,9,10]
+    batch_size = 5
+
+    ### Set the filename of the pretrained MS-D model
+    filename = 'msd_network_d=50_epoch_47.torch'
+
+    ### END USER CONFIGURABLE PARAMETERS
+
+    c_in = 1
+    width = 1
+    labels = [0, 1, 2, 3, 4]
 
     path = str(pathlib.Path().absolute()) + '/data/'
     train_input_glob = path+"train/noisy/*.tiff"
@@ -19,9 +42,6 @@ if __name__ == '__main__':
     val_target_glob = path+"val/label/*.tiff"
     test_input_glob = path+"test/noisy/*.tiff"
     test_target_glob = path+"test/label/*.tiff"
-
-    labels = [0, 1, 2, 3, 4]
-    batch_size = 5
 
     print("Load training dataset")
     train_ds = mp.ImageDataset(train_input_glob, train_target_glob, labels=labels)
@@ -45,19 +65,11 @@ if __name__ == '__main__':
 
     # Load pre-trained network
     # User can train their own but we have pre-supplied one
-    model.load("trained_models/msd_network_d=50_epoch_47.torch")
+    model.load("trained_models/" + filename)
 
     # Accuracy of base model:
     acc = get_global_accuracy(model, test_dl)
 
-    # Choose which pruning procedure to run
-    lean_pruning = True
-    indivL1_pruning = False
-    indivSV_pruning = False
-
-    perc = 0.05
-    nsteps = 15
-    retraining_epochs = 3
     percentage = np.exp(np.log(perc)/float(nsteps))
     print("Pruning to ratio {0} in {1} steps.".format(perc, nsteps))
     print("Removes {0:.2f}% of convolutions each step.".format(100*(1.0-percentage)))

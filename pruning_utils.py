@@ -1,3 +1,5 @@
+### CVPR 2021 Submission #8167. Confidential review copy. Do not distribute.
+
 import torch
 
 def get_default_mask(modul, nam):
