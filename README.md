@@ -49,7 +49,7 @@ py.test
 
 
 ## Running experiments
-The code contains ready-to-run scripts to perform pruning experiments (of all three methods introduced in the paper) on the MS-D network on the simulated Circle-Square (CS) dataset. We provide a script to generate training, validation, and test data. We also provide a script to train an MS-D network on this data. There is already a pretrained network in the `trained_models` folder that the user can use. Next, we provide a script to prune the trained MS-D network with any of the three methods described in the manuscript. 
+The code contains ready-to-run scripts to perform pruning experiments (of all three methods introduced in the paper) on the MS-D network on the simulated Circle-Square (CS) dataset. We provide a script to generate training, validation, and test data. We also provide a script to train an MS-D network on this data. There is already a pretrained network in the `trained_models` folder that the user can use, and there is pre-supplied data. Next, we provide a script to prune the trained MS-D network with any of the three methods described in the manuscript. 
 
 In the `pruned_models` folder, example pruned networks from an experimental run are given. To obtain the accuracy of a pruned model on the test set, run 
 `get_global_accuracy(model, test_dl)`. The pruning ratio and accuracy on the test set are automatically written into the filename.
@@ -57,9 +57,8 @@ In the `pruned_models` folder, example pruned networks from an experimental run 
 1. First, move to the `examples` directory.
 
 ### Generate new training data
-**Note:** Due to size limitations of this .zip file, users need to generate their own training data.
 
-2. To generate data in the `data` directory, run:
+2. As mentioned, training data is supplied. To generate new data in the `data` directory, run:
 ```
 python generate_example_data.py
 ```

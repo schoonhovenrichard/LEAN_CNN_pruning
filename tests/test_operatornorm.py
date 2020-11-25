@@ -1,5 +1,3 @@
-### CVPR 2021 Submission #8167. Confidential review copy. Do not distribute.
-
 import scipy.signal
 import numpy as np
 import random

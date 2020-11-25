@@ -1,5 +1,3 @@
-### CVPR 2021 Submission #8167. Confidential review copy. Do not distribute.
-
 import pruning_algorithms as lean
 import numpy as np
 import random

@@ -1,5 +1,3 @@
-### CVPR 2021 Submission #8167. Confidential review copy. Do not distribute.
-
 import torch
 import msd_pytorch as mp
 import numpy as np

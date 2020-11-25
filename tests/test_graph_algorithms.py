@@ -1,5 +1,3 @@
-### CVPR 2021 Submission #8167. Confidential review copy. Do not distribute.
-
 import graph_algorithms as gu
 import numpy as np
 import networkx as nx
