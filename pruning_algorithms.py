@@ -9,8 +9,14 @@ from pruning_utils import *
 import graph_algorithms as gru
 
 
-def LEAN_SV_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
+##################################
+###  RESNET PRUNING FUNCTIONS  ###
+##################################
+
+def LEAN_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
     r"""Prune FCN-ResNet50 model using LEAN pruning.
+    NOTE: This function assumes that ResNet has an average pooling layer
+            instead of max-pooling.
 
     Args:
         - pmodel: PyTorch-model of FCN-ResNet50 to be pruned.
@@ -23,8 +29,9 @@ def LEAN_SV_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
     # to obtain 'tot_perc' percent of pruning. It can e.g. require
     # less than the expected percentage because redundancy pruning
     # removed a significant amount in the previous pruning phase.
-    if pruned_before_ResNet50(pmodel):
-        prun_conv, tot_conv, frac_prun = fraction_pruned_convs_ResNet50(pmodel)
+    prunedQ = pruned_before_ResNet50(pmodel)
+    if prunedQ:
+        prun_conv, tot_conv, frac_prun = fraction_pruned_convs_ResNet50Avg(pmodel)
         if frac_prun >= 1 - tot_perc:
             if verbose:
                 print("No pruning to be done")
@@ -32,25 +39,28 @@ def LEAN_SV_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
         perc = 1.0 - tot_perc/(1.0 - frac_prun)
     else:
         perc = 1.0 - tot_perc
+    if verbose:
+        print("Frac pruned convs should be:", 1 - tot_perc)
 
-    M = 7 # Size of temporary input image
-    # If the largest convolution is KxK, M=K is sufficient
-    # A larger value will just increase each norm by a factor of (M/K)
-    # However, a smaller M will give misleading results.
+    M = 16 # Size of temporary input image
     order = 'max' # SVD-norm used for pruning
-    parameters_to_prune = get_convs_ResNet50(pmodel)
-    batchnorms = get_batchnorms_ResNet50(pmodel)
+    parameters_to_prune = get_convs_ResNet50Avg(pmodel)
+    batchnorms = get_batchnorms_ResNet50Avg(pmodel)
 
     # These are the indices of the downsample layer and where they point to
-    downsample_idxs = [4,14,27,46]
-    after_downsample_idxs = [5,15,28,47]
+    downsample_idxs = [5,15,28,47]
+    after_downsample_idxs = [6,16,29,48]
     # These are the other skip connections which are just identity mappings,
     #  when the identity points to a downsample layer, there are several connections
-    skip_idxs = np.array([(8,3),(8,4),(11,7),(18,13),(18,14),(21,17),(24,20),(31,26),(31,27),(34,30),(37,33),(40,36),(43,39),(50,45),(50,46)])
+    skip_idxs = np.array([(9,4),(9,5),(12,8),(19,14),(19,15),(22,18),(25,21),(32,27),(32,28),(35,31),(38,34),(41,37),(44,40),(51,46),(51,47)])
+    avg_idxs = [1]
 
-    if pruned_before_ResNet50(pmodel) and Redun:
-        Prune_Redundant_Convolutions_ResNet50(pmodel)
+    # If we are considering redundancy pruning, we must remove zero-images to avoid
+    #  batch-scaling to skew the norms
+    if prunedQ and Redun:
+        Prune_Redundant_Convolutions_ResNet50Avg(pmodel)
 
+    # Calculate the number of nodes in the graph:
     nr_nodes = pmodel.c_in # start at c_in because of number of input channels
     for modul, nam in parameters_to_prune:
         orig = getattr(modul, nam)
@@ -58,31 +68,27 @@ def LEAN_SV_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
     if verbose:
         print("Number of nodes in graph:", nr_nodes)
 
-    norm_adjacency_matrix = np.zeros(shape=(nr_nodes,nr_nodes),dtype=np.float32)
-    skip_connection_matrix = np.zeros(shape=(nr_nodes,nr_nodes),dtype=np.bool)
-
-    ### Create the norm graph
+    # NOTE: Below follows a big chunk of code. It builds the pruning graph
+    # Associated with ResNet50-average-pooling. 
+    ignore_edges_list = []
+    adj_list =[]
     count_row = pmodel.c_in
     count_col = 0
     it = 0
+    row_counts = []
+    col_counts = []
+
+    strongconvs = 0
     for modul, nam in parameters_to_prune:
+        row_counts.append(count_row)
+        col_counts.append(count_col)
         orig = getattr(modul, nam)
+        strides = modul.stride
+        if prunedQ:
+            current_mask = get_default_mask(modul, nam)
 
-        ### Compute the convolution norms
-        norms = compute_FourierSVD_norms(orig, M, order).numpy()
-
-        ### Include the skip connections
-        if it in skip_idxs[:,0]: # This layer has an incoming skip connection
-            idx = np.where(skip_idxs[:,0] == it)[0][0]
-            modul_in, nam_in = parameters_to_prune[skip_idxs[idx,1]]
-            modul_between, nam_between = parameters_to_prune[skip_idxs[idx,1]+1]
-            orig_in = getattr(modul_in, nam_in)
-            orig_between = getattr(modul_between, nam_between)
-            skip_size_row, skip_size_col = orig_in.size()[0], orig_in.size()[1]
-            skip_row = count_row
-            skip_col = count_col - skip_size_col - orig_between.size()[1]
-            norm_adjacency_matrix[skip_row:skip_row+skip_size_row, skip_col:skip_col+skip_size_col] = 1
-            skip_connection_matrix[skip_row:skip_row+skip_size_row, skip_col:skip_col+skip_size_col] = True
+        ### Compute the operator norms of the convolutions
+        norms = compute_FourierSVD_norms(orig, M, order, strides).numpy()
 
         # Incoporate batch normalization scaling and set the edge values
         # in the adjacency matrix.
@@ -95,59 +101,185 @@ def LEAN_SV_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
                 batch_mult = np.abs(bn_mults[chan].cpu().numpy())
                 batch_rvar = bn_rvar[chan].cpu().numpy()
                 batch_mult = batch_mult / np.sqrt(batch_rvar + eps)
-            for c_in in range(norms.shape[1]):
-                if it in downsample_idxs:
-                    count_col_skip = col_counts[it-4]
+            
+            # Deal with the downsample skip connections
+            if it in downsample_idxs:
+                outidx = count_row + chan
+                count_col_skip = col_counts[it-4]
+                for c_in in range(orig.size()[1]):
+                    if prunedQ and current_mask[chan, c_in].sum() == 0:
+                        continue
+                    val = norms[chan, c_in]
                     if batchnorms[it] is not None:
-                        norm_adjacency_matrix[count_row+chan,count_col_skip+c_in] = norms[chan,c_in] * batch_mult
-                    else:
-                        norm_adjacency_matrix[count_row+chan,count_col_skip+c_in] = norms[chan,c_in]
-                elif it in after_downsample_idxs:
-                    count_col_skip = col_counts[it-1]
+                        val *= batch_mult
+                    if val > 1:
+                        strongconvs += 1
+                    inidx = count_col_skip + c_in
+                    idx_list = len(adj_list)#This is so that we know the order after we perform topological sort
+                    edge = [inidx, outidx, val, idx_list]
+                    adj_list.append(edge)
+                    ignore_edges_list.append([inidx, outidx, False])
+            elif it in after_downsample_idxs:
+                # Deal with convolutions that have multiple inputs as a result
+                #  of a preceding downsampling connection
+                outidx = count_row + chan
+                count_col_skip = col_counts[it-1]
+                for c_in in range(orig.size()[1]):
+                    if prunedQ and current_mask[chan, c_in].sum() == 0:
+                        continue
+                    val = norms[chan, c_in]
                     if batchnorms[it] is not None:
-                        norm_adjacency_matrix[count_row+chan,count_col+c_in] = norms[chan,c_in] * batch_mult
-                        norm_adjacency_matrix[count_row+chan,count_col_skip+c_in] = norms[chan,c_in] * batch_mult
-                    else:
-                        norm_adjacency_matrix[count_row+chan,count_col+c_in] = norms[chan,c_in]
-                        norm_adjacency_matrix[count_row+chan,count_col_skip+c_in] = norms[chan,c_in]
-                else:
+                        val *= batch_mult
+                    if val > 1:
+                        strongconvs += 1
+
+                    # We have two edges here
+                    inidx = count_col + c_in
+                    idx_list = len(adj_list)#This is so that we know the order after we perform topological sort
+                    edge = [inidx, outidx, val, idx_list]
+                    adj_list.append(edge)
+                    ignore_edges_list.append([inidx, outidx, False])
+            else:
+                # Normal convolutional layers
+                outidx = count_row + chan
+                for c_in in range(orig.size()[1]):
+                    if prunedQ and current_mask[chan, c_in].sum() == 0:
+                        continue
+                    val = norms[chan, c_in]
                     if batchnorms[it] is not None:
-                        norm_adjacency_matrix[count_row+chan,count_col+c_in] = norms[chan,c_in] * batch_mult
+                        val *= batch_mult
+                    if val > 1:
+                        strongconvs += 1
+                    inidx = count_col + c_in
+                    idx_list = len(adj_list)#This is so that we know the order after we perform topological sort
+                    edge = [inidx, outidx, val, idx_list]
+                    adj_list.append(edge)
+                    if it in avg_idxs:#This layer is average pooling layer
+                        ignore_edges_list.append([inidx, outidx, True])
                     else:
-                        norm_adjacency_matrix[count_row+chan,count_col+c_in] = norms[chan,c_in]
+                        ignore_edges_list.append([inidx, outidx, False])
+
+        # Incorporate skip connections that are simple identity mappings,
+        #  i.e., are implemented as an addition in the forward pass and
+        #  have no learnable parameters
+        if it in skip_idxs[:,0]: # This layer has an incoming skip connctn
+            idx = np.where(skip_idxs[:,0] == it)[0][0]
+            modul_in, nam_in = parameters_to_prune[skip_idxs[idx,1]]
+            modul_between, nam_between=parameters_to_prune[skip_idxs[idx,1]+1]
+            orig_in = getattr(modul_in, nam_in)
+            orig_between = getattr(modul_between, nam_between)
+            skip_size_row, skip_size_col = orig_in.size()[0], orig_in.size()[1]
+            skip_col = count_col - skip_size_col - orig_between.size()[1]
+            for chan in range(skip_size_row):
+                for cin in range(skip_size_col):
+                    outidx = count_row + chan
+                    inidx = skip_col + cin
+                    val = 1
+                    idx_list = len(adj_list)#This is so that we know the order after we perform topological sort
+                    edge = [inidx, outidx, val, idx_list]
+                    adj_list.append(edge)
+                    ignore_edges_list.append([inidx, outidx, True])
+        if it in after_downsample_idxs:# Due to the summation that happen in ResNet
+            # after certain downsampling steps, we need this unprunable identity edge.
+            count_col_skip = col_counts[it-1]
+            modul_in, nam_in = parameters_to_prune[it-1]
+            orig_in = getattr(modul_in, nam_in)
+            for c_in in range(orig_in.size()[1]):
+                outidx = count_col + c_in
+                val = 1
+                inidx = count_col_skip + c_in
+                idx_list = len(adj_list)
+                edge = [inidx, outidx, val, idx_list]
+                adj_list.append(edge)
+                ignore_edges_list.append([inidx, outidx, True])
         count_row += norms.shape[0]
         count_col += norms.shape[1]
         it += 1
+    print("Convolutions with norms > 1:", strongconvs)
 
-    # Now that we have the matrix, we iteratively extract the strongest
-    # multiplicative paths to keep while pruning. This function returns
-    # a boolean array with the convolutions that should be pruned.
-    pruned = gru.longest_path_prune(norm_adjacency_matrix, perc, skip_connection_matrix)
+    # Here, we convert the previous matrix to a data structure that the
+    #  Rust implementation can use
+    adj_list.sort(key=lambda tup: tup[0])
+    adjarr = np.array(adj_list)
+    codebook = np.array([list(range(adjarr.shape[0])), adjarr[:,3].tolist()], dtype=np.int32).transpose()
+    codebook = codebook[np.argsort(codebook[:, 1])]
+    codebook[:,[0, 1]] = codebook[:,[1, 0]]
+    ignore_edges_list.sort(key=lambda tup: tup[0])
+    ignorearr = np.array(ignore_edges_list)
 
-    ### Perform the pruning on the actual Pytorch model
-    count_row = pmodel.c_in
-    count_col = 0
+    # Run the fast Rust implementation
+    pruned = gru.longest_path_prune_fast(adjarr, perc, ignore_edges_arr=ignorearr)
+
+    # Based on the paths returned, below performs the actual pruning.
+    it = 0
+    code_iter = 0
     for modul, nam in parameters_to_prune:
+        count_row = row_counts[it]
+        count_col = col_counts[it]
         orig = getattr(modul, nam)
         mask = torch.ones_like(orig)
         default_mask = get_default_mask(modul, nam)
-        for i in range(mask.size()[0]):
-            for j in range(mask.size()[1]):
-                if pruned[count_row + i,count_col + j]:
-                    mask[i][j] = torch.zeros_like(orig[i][j])
-        count_row += mask.size()[0]
-        count_col += mask.size()[1]
+        if it in avg_idxs:#We do not prune the pooling layer (its 3x3 here!)
+            code_iter += int(default_mask.sum()/9)
+        else:
+            if it in downsample_idxs:
+                for i in range(mask.size()[0]):
+                    for j in range(mask.size()[1]):
+                        if prunedQ and default_mask[i, j].sum() == 0:
+                            # it already was pruned, ergo it has no edge
+                            continue
+                        code = codebook[code_iter]
+                        edge_idx = code[1]
+                        if not pruned[edge_idx]:
+                            mask[i][j] = torch.zeros_like(orig[i][j])
+                        code_iter += 1
+            elif it in after_downsample_idxs:
+                for i in range(mask.size()[0]):
+                    for j in range(mask.size()[1]):
+                        if prunedQ and default_mask[i, j].sum() == 0:
+                            # it already was pruned, ergo it has no edge
+                            continue
+                        code = codebook[code_iter]
+                        edge_idx = code[1]
+                        if not pruned[edge_idx]:
+                            mask[i][j] = torch.zeros_like(orig[i][j])
+                        code_iter += 1
+            else:
+                for i in range(mask.size()[0]):
+                    for j in range(mask.size()[1]):
+                        if prunedQ and default_mask[i, j].sum() == 0:
+                            # it already was pruned, ergo it has no edge
+                            continue
+                        code = codebook[code_iter]
+                        edge_idx = code[1]
+                        if not pruned[edge_idx]:
+                            mask[i][j] = torch.zeros_like(orig[i][j])
+                        code_iter += 1
+            if it in skip_idxs[:,0]: # This layer has an incoming skip connctn
+                idx = np.where(skip_idxs[:,0] == it)[0][0]
+                modul_in, nam_in = parameters_to_prune[skip_idxs[idx,1]]
+                modul_between, nam_between=parameters_to_prune[skip_idxs[idx,1]+1]
+                orig_in = getattr(modul_in, nam_in)
+                orig_between = getattr(modul_between, nam_between)
+                skip_size_row, skip_size_col = orig_in.size()[0], orig_in.size()[1]
+                skip_col = count_col - skip_size_col - orig_between.size()[1]
+                code_iter += skip_size_row * skip_size_col
+            if it in after_downsample_idxs:# Due to the summation that happen in ResNet
+                # after certain downsampling steps, we need this unprunable identity edge
+                modul_in, nam_in = parameters_to_prune[it-1]
+                orig_in = getattr(modul_in, nam_in)
+                code_iter += orig_in.size()[1]
         mask *= default_mask.to(dtype=mask.dtype)
         method = prune.CustomFromMask(mask)
         method.apply(modul, nam, mask)
+        it += 1
 
-    # Perform redundancy pruning (if active) or prune batch normalization.
-    # Redundancy pruning also contains the batch normalization pruning step.
     if Redun:
-        Prune_Redundant_Convolutions_ResNet50(pmodel)
+        Prune_Redundant_Convolutions_ResNet50Avg(pmodel)
     else:
-        apply_mask_to_batchnorm_ResNet50(pmodel)
+        apply_mask_to_batchnorm_ResNet50Avg(pmodel)
     return pmodel
+
 
 def IndivL1_Global_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
     r"""Prune FCN-ResNet50 model using individual filter 
@@ -297,6 +429,215 @@ def IndivSV_Global_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
     else:
         apply_mask_to_batchnorm_ResNet50(pmodel)
     return pmodel
+
+#################################
+###  U-NET PRUNING FUNCTIONS  ###
+#################################
+
+def LEAN_UNet4(pmodel, tot_perc, Redun=True, verbose=False):
+    r"""Prune FCN-UNet4 model using LEAN pruning.
+    NOTE: This function assumes that U-Net has an average pooling layer
+            instead of max-pooling.
+
+    Args:
+        - pmodel: PyTorch-model of FCN-UNet4 to be pruned.
+        - tot_perc (float): The total fraction of convolutions
+            we want pruned at the end of this pruning step.
+        - Redun (bool): Whether to perform redundancy pruning
+            at the end of the pruning phase. Default is True.
+    """
+    # Calculate by what percentage the model needs to be pruned
+    # to obtain 'tot_perc' percent of pruning. It can e.g. require
+    # less than the expected percentage because redundancy pruning
+    # removed a significant amount in the previous pruning phase.
+    prunedQ = pruned_before_UNet4(pmodel)
+    if prunedQ:
+        prun_conv, tot_conv, frac_prun = fraction_pruned_convs_UNetAvg4Strided(pmodel)
+        if frac_prun >= 1 - tot_perc:
+            if verbose:
+                print("No pruning to be done")
+            return pmodel
+        perc = 1.0 - tot_perc/(1.0 - frac_prun)
+    else:
+        perc = 1.0 - tot_perc
+    if verbose:
+        print("Frac pruned convs should be:", 1 - tot_perc)
+
+    M = 16 # Size of temporary input image
+    order = 'max' # SVD-norm used for pruning
+    parameters_to_prune = get_convs_UNetB4Strided(pmodel)
+    batchnorms = get_batchnorms_UNetB4Strided(pmodel)
+
+    # These are the indices of the downsample layer and where they point to
+    # These are the other skip connections which are just identity mappings,
+    #  when the identity points to a downsample layer, there are several connections
+    after_upscale_idxs = [15,18,21,24]
+    skip_idxs = np.array([(15,10),(18,7),(21,4),(24,1)])
+    avg_idxs = [2, 5, 8, 11]
+
+    # If we are considering redundancy pruning, we must remove zero-images
+    #to avoid batch-scaling to skew the norms
+    if prunedQ and Redun:
+        Prune_Redundant_Convolutions_UNetB4Strided(pmodel)
+
+    # Count the number of nodes that will be in the pruning graph
+    nr_nodes = pmodel.c_in # start at c_in because of number of input channels
+    for modul, nam in parameters_to_prune:
+        orig = getattr(modul, nam)
+        nr_nodes += orig.size()[0]
+    print("Number of nodes in graph:", nr_nodes)
+
+
+    # BELOW FOLLOWS a lot of code to define the pruning graph with
+    #  with the different skip connections and pooling etc. 
+    ignore_edges_list = []
+    adj_list = []
+    count_row = pmodel.c_in
+    count_col = 0
+    it = 0
+    row_counts = []
+    col_counts = []
+
+    strongconvs = 0
+    for modul, nam in parameters_to_prune:
+        row_counts.append(count_row)
+        col_counts.append(count_col)
+        orig = getattr(modul, nam)
+        strides = modul.stride
+        if prunedQ:
+            current_mask = get_default_mask(modul, nam)
+
+        # Calculate operator norms for convolution layer
+        norms = compute_FourierSVD_norms(orig, M, order, strides).numpy()
+
+        # Incorporate batch normalization
+        if batchnorms[it] is not None:
+            bn_mults = batchnorms[it].weight.data
+            bn_rvar = batchnorms[it].running_var.data
+            eps = batchnorms[it].eps
+        if it in after_upscale_idxs:#We need special procedure to deal with skip connections
+            idx = np.where(skip_idxs[:,0] == it)[0][0]
+            inputidx = skip_idxs[idx,1]
+            count_col_skip = col_counts[inputidx]
+            modul_in, nam_in = parameters_to_prune[skip_idxs[idx,1]]
+            orig_in = getattr(modul_in, nam_in)
+            skip_size_row, skip_size_col = orig_in.size()[0],orig_in.size()[1]
+            for chan in range(orig.size()[0]):
+                if batchnorms[it] is not None:
+                    batch_mult = np.abs(bn_mults[chan].cpu().numpy())
+                    batch_rvar = bn_rvar[chan].cpu().numpy()
+                    batch_mult = batch_mult / np.sqrt(batch_rvar + eps)
+                outidx = count_row + chan
+                for c_in in range(orig.size()[1]):
+                    if prunedQ and current_mask[chan, c_in].sum() == 0:
+                        continue
+                    if c_in < skip_size_col:
+                        inidx = count_col_skip + c_in
+                    else:# The output from up1.up, i.e. previous, is last in the concatenation
+                        inidx = count_col + c_in - skip_size_col
+                    val = norms[chan, c_in]
+                    if batchnorms[it] is not None:
+                        val *= batch_mult
+                    if val > 1:
+                        strongconvs += 1
+                    idx_list = len(adj_list)#This is so that we know the order after we perform topological sort
+                    edge = [inidx, outidx, val, idx_list]
+                    adj_list.append(edge)
+                    ignore_edges_list.append([inidx, outidx, False])
+            count_col -= skip_size_col#norm array is too large because it
+            # also contains the concatenated skip connection norms.
+        else:
+            for chan in range(orig.size()[0]):
+                if batchnorms[it] is not None:
+                    batch_mult = np.abs(bn_mults[chan].cpu().numpy())
+                    batch_rvar = bn_rvar[chan].cpu().numpy()
+                    batch_mult = batch_mult / np.sqrt(batch_rvar + eps)
+                outidx = count_row + chan
+                for c_in in range(orig.size()[1]):
+                    if prunedQ and current_mask[chan, c_in].sum() == 0:
+                        continue
+                    val = norms[chan, c_in]
+                    if batchnorms[it] is not None:
+                        val *= batch_mult
+                    if val > 1:
+                        strongconvs += 1
+                    inidx = count_col + c_in
+                    idx_list = len(adj_list)#This is so that we know the order after we perform topological sort
+                    edge = [inidx, outidx, val, idx_list]
+                    adj_list.append(edge)
+                    if it in avg_idxs:#This layer is average pooling layer
+                        ignore_edges_list.append([inidx, outidx, True])
+                    else:
+                        ignore_edges_list.append([inidx, outidx, False])
+        count_row += norms.shape[0]
+        count_col += norms.shape[1]
+        it += 1
+    if verbose:
+        print("Convolutions with norms > 1:", strongconvs)
+
+    # Here, we convert the previous matrix to a data structure that the
+    #  Rust implementation can use
+    adj_list.sort(key=lambda tup: tup[0])
+    adjarr = np.array(adj_list)
+    codebook = np.array([list(range(adjarr.shape[0])), adjarr[:,3].tolist()], dtype=np.int32).transpose()
+    codebook = codebook[np.argsort(codebook[:, 1])]
+    codebook[:,[0, 1]] = codebook[:,[1, 0]]
+    ignore_edges_list.sort(key=lambda tup: tup[0])
+    ignorearr = np.array(ignore_edges_list)
+
+    # Run the fast Rust implementation
+    pruned = gru.longest_path_prune_fast(adjarr, perc, ignore_edges_arr=ignorearr)
+
+    # Based on the paths returned, below performs the actual pruning.
+    it = 0
+    code_iter = 0
+    for modul, nam in parameters_to_prune:
+        count_row = row_counts[it]
+        count_col = col_counts[it]
+        orig = getattr(modul, nam)
+        mask = torch.ones_like(orig)
+        default_mask = get_default_mask(modul, nam)
+        if it in avg_idxs:
+            code_iter += int(default_mask.sum()/4)
+        else:
+            if it in after_upscale_idxs:#We need special procedure to deal with skip concts
+                for i in range(mask.size()[0]):
+                    for j in range(mask.size()[1]):
+                        if prunedQ and default_mask[i, j].sum() == 0:
+                            # it already was pruned, ergo it has no edge
+                            continue
+                        code = codebook[code_iter]
+                        edge_idx = code[1]
+                        if not pruned[edge_idx]:
+                            mask[i][j] = torch.zeros_like(orig[i][j])
+                        code_iter += 1
+            else:
+                for i in range(mask.size()[0]):
+                    for j in range(mask.size()[1]):
+                        if prunedQ and default_mask[i, j].sum() == 0:
+                            # it already was pruned, ergo it has no edge
+                            continue
+                        code = codebook[code_iter]
+                        edge_idx = code[1]
+                        if not pruned[edge_idx]:
+                            mask[i][j] = torch.zeros_like(orig[i][j])
+                        code_iter += 1
+        mask *= default_mask.to(dtype=mask.dtype)
+        method = prune.CustomFromMask(mask)
+        method.apply(modul, nam, mask)
+        it += 1
+
+    if Redun:
+        Prune_Redundant_Convolutions_UNetB4Strided(pmodel)
+    else:
+        apply_mask_to_batchnorm_UNetB4Strided(pmodel)
+    return pmodel
+
+
+################################
+###  MS-D PRUNING FUNCTIONS  ###
+################################
+
 
 def LEAN_SV_MSD(pmodel, tot_perc, Redun=True, verbose=False):
     r"""Prune MS-D model using LEAN pruning. 

@@ -28,16 +28,6 @@ conda activate LEAN_CNN_pruning
 pip install -e .
 ```
 
-**Note**: If the user encounters errors such as:
-
-```
-Traceback (most recent call last):
-  File "prune_example_msd.py", line 6, in <module>
-    import pruning_algorithms as lean
-ModuleNotFoundError: No module named 'pruning_algorithms'
-```
-while running certain examples, this is possibly because the step `pip install -e .` was not performed, or not performed with the `-e` flag.
-
 
 ## Running tests
 The package contains correctness tests of a number of building block algorithms used in LEAN pruning. To optionally perform these tests,

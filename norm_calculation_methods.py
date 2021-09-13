@@ -37,7 +37,44 @@ def fourier_operatornorm(kern, n, order):
         else:
             raise Exception("Not implemented order")
 
-def compute_FourierSVD_norms(t, M, orde):
+def compute_norm_stride2(mat, N, order):
+    if mat.shape[0] != mat.shape[1]:
+        raise Exception("Something gone terribly wrong here")
+    if mat.shape[0] == 2:
+        return np.sqrt(np.abs(mat**2).sum())
+    siz = mat.shape[0]//2 + (mat.shape[0] % 2)
+    f1 = np.zeros(shape=(siz,siz))
+    f2 = np.zeros(shape=(siz,siz))
+    f3 = np.zeros(shape=(siz,siz))
+    f4 = np.zeros(shape=(siz,siz))
+    f1 += mat[0::2,0::2]
+    f2mat = mat[0::2,1::2]
+    f2[:f2mat.shape[0], :f2mat.shape[1]] += f2mat
+    f3mat = mat[1::2,0::2]
+    f3[:f3mat.shape[0], :f3mat.shape[1]] += f3mat
+    f4mat = mat[1::2,1::2]
+    f4[:f4mat.shape[0], :f4mat.shape[1]] += f4mat
+
+    f1fft = np.fft.fft2(f1, [N//2, N//2], axes=[0, 1])
+    f2fft = np.fft.fft2(f2, [N//2, N//2], axes=[0, 1])
+    f3fft = np.fft.fft2(f3, [N//2, N//2], axes=[0, 1])
+    f4fft = np.fft.fft2(f4, [N//2, N//2], axes=[0, 1])
+
+    #Fast numpy one-liner
+    P = np.array([f1fft, f2fft, f3fft, f4fft])
+    Svals = np.linalg.norm(P, axis=0) # is 2 norm by default for vectors
+    if order == 'max':
+        return np.max(Svals)
+    else:
+        if order == 'nuc':
+            return np.sum(Svals)
+        elif order == 'fro':
+            frob = np.sum(Svals**2)
+            return np.sqrt(frob)
+        else:
+            raise Exception("Not implemented order")
+
+def compute_FourierSVD_norms(t, M, orde, strides):
     r"""Computes the norm of a convolutional layer as interpreted
         as a matrix operator.
 
@@ -46,21 +83,37 @@ def compute_FourierSVD_norms(t, M, orde):
         M (int): Dimension of (mock) input image.
         orde (string, int): Order of the norm. Either a string 'nuc'
             or 'fro', or an integer.
+        strides (tuple<int>): tuple of strides (x,y) for both
+            convolution dimensions.
 
     Returns:
         norm (list(float)): List of list of norms for all channels,
             and all inputs for the tensor.
     """
     if t.size()[-1] >= 1  and t.size()[-2] >= 1:
-        tnorms = []
-        for x in range(t.size()[0]):
-            normsx = []
-            for y in range(t[x].size()[0]):
-                kernel = t[x][y]
-                knorm = fourier_operatornorm(kernel, M, orde)
-                normsx.append(knorm)
-            tnorms.append(normsx)
-        tnorms = torch.Tensor(tnorms)
+        if strides == (1,1):
+            tnorms = []
+            for x in range(t.size()[0]):
+                normsx = []
+                for y in range(t[x].size()[0]):
+                    kernel = t[x][y]
+                    knorm = fourier_operatornorm(kernel, M, orde)
+                    normsx.append(knorm)
+                tnorms.append(normsx)
+            tnorms = torch.Tensor(tnorms)
+        elif strides == (2,2):
+            tnorms = []
+            tnumpy = t.detach().cpu().numpy()
+            for x in range(tnumpy.shape[0]):
+                normsx = []
+                for y in range(tnumpy.shape[1]):
+                    kernel = tnumpy[x][y]
+                    knorm = compute_norm_stride2(kernel, M, orde)
+                    normsx.append(knorm)
+                tnorms.append(normsx)
+            tnorms = torch.Tensor(tnorms)
+        else:
+            raise Exception("Not implemented for this stride size")
     else:
         raise Exception("Asked to compute norm of non-convolutional layer!")
     return tnorms
