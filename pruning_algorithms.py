@@ -298,7 +298,7 @@ def IndivL1_Global_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
     # removed a significant amount in the previous pruning phase.
     N = 1
     if pruned_before_ResNet50(pmodel):
-        prun_conv, tot_conv, frac_prun = fraction_pruned_convs_ResNet50(pmodel)
+        prun_conv, tot_conv, frac_prun = fraction_pruned_convs_ResNet50Avg(pmodel)
         if frac_prun >= 1 - tot_perc:
             if verbose:
                 print("No pruning to be done")
@@ -307,43 +307,55 @@ def IndivL1_Global_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
     else:
         perc = 1.0 - tot_perc
 
-    parameters_to_prune = get_convs_ResNet50(pmodel)
+    parameters_to_prune = get_convs_ResNet50Avg(pmodel)
     if pruned_before_ResNet50(pmodel) and Redun:
-        Prune_Redundant_Convolutions_ResNet50(pmodel)
+        Prune_Redundant_Convolutions_ResNet50Avg(pmodel)
 
-    # Compute the convolution norms as L1 vector norm.
+    avg_idxs = [1]# Index of the average pooling laeyr in the list "parameters to prune"
     all_norms = np.array([], dtype=np.float32)
     layer_norms = []
+    it = 0
     for modul, nam in parameters_to_prune:
         orig = getattr(modul, nam)
+        if it in avg_idxs:
+            it += 1
+            continue
+        # Compute the convolution norms as L1 vector norm.
         norms = compute_Ln_norms_conv(orig, N).numpy()
-        all_norms = np.concatenate((all_norms, norms[norms > 0].flatten()))
+        if pruned_before_ResNet50(pmodel):
+            all_norms = np.concatenate((all_norms, norms[norms > 0].flatten()))
+        else:
+            all_norms = np.concatenate((all_norms, norms.flatten()))
         layer_norms.append(norms.tolist())
+        it += 1
     threshold = np.percentile(all_norms, 100*perc)
 
     ### Perform the pruning on the actual Pytorch model
     conv_masks = []
     it = 0
+    it2 = 0
     for modul, nam in parameters_to_prune:
         orig = getattr(modul, nam)
-        lnorms = layer_norms[it]
+        lnorms = layer_norms[it2]
         mask = torch.ones_like(orig)
         default_mask = get_default_mask(modul, nam)
-        for i in range(len(lnorms)):
-            for j in range(len(lnorms[i])):
-                if lnorms[i][j] < threshold:
-                    mask[i][j] = torch.zeros_like(orig[i][j])
-        mask *= default_mask.to(dtype=mask.dtype)
+        if it not in avg_idxs:
+            for i in range(len(lnorms)):
+                for j in range(len(lnorms[i])):
+                    if lnorms[i][j] < threshold:
+                        mask[i][j] = torch.zeros_like(orig[i][j])
+            it2 += 1
         it += 1
+        mask *= default_mask.to(dtype=mask.dtype)
         method = prune.CustomFromMask(mask)
         method.apply(modul, nam, mask)
 
     # Perform redundancy pruning (if active) or prune batch normalization.
     # Redundancy pruning also contains the batch normalization pruning step.
     if Redun:
-        Prune_Redundant_Convolutions_ResNet50(pmodel)
+        Prune_Redundant_Convolutions_ResNet50Avg(pmodel)
     else:
-        apply_mask_to_batchnorm_ResNet50(pmodel)
+        apply_mask_to_batchnorm_ResNet50Avg(pmodel)
     return pmodel
 
 def IndivSV_Global_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
@@ -371,7 +383,7 @@ def IndivSV_Global_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
     else:
         perc = 1.0 - tot_perc
 
-    M = 7 # Size of temporary input image
+    M = 16 # Size of temporary input image
     order = 'max' # SVD-norm used for pruning
     parameters_to_prune = get_convs_ResNet50(pmodel)
     batchnorms = get_batchnorms_ResNet50(pmodel)
@@ -379,13 +391,17 @@ def IndivSV_Global_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
     if pruned_before_ResNet50(pmodel) and Redun:
         Prune_Redundant_Convolutions_ResNet50(pmodel)
 
-    # Compute the convolution norms using Fourier SVD decomposition
+    # Compute the operator norms using Fourier transforms
     it = 0
     all_norms = np.array([], dtype=np.float32)
     layer_norms = []
     for modul, nam in parameters_to_prune:
         orig = getattr(modul, nam)
-        norms = compute_FourierSVD_norms(orig, M, order).numpy()
+        strides = modul.stride
+        if it in avg_idxs:
+            it += 1
+            continue
+        norms = compute_FourierSVD_norms(orig, M, order, strides).numpy()
         if batchnorms[it] is not None:
             bn_mults = batchnorms[it].weight.data
             bn_rvar = batchnorms[it].running_var.data
@@ -395,39 +411,40 @@ def IndivSV_Global_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
                 batch_rvar = bn_rvar[chan].cpu().numpy()
                 batch_mult = batch_mult / np.sqrt(batch_rvar + eps)
                 norms[chan,:] *= batch_mult
-        all_norms = np.concatenate((all_norms, norms[norms > 0].flatten()))
+        if pruned_before_ResNet50(pmodel):
+            all_norms = np.concatenate((all_norms, norms[norms > 0].flatten()))
+        else:
+            all_norms = np.concatenate((all_norms, norms.flatten()))
         layer_norms.append(norms.tolist())
         it += 1
     threshold = np.percentile(all_norms, 100*perc)
 
     ### Perform the pruning on the actual Pytorch model
-    masks = []
+    conv_masks = []
     it = 0
-    count_masked = 0
-    count_notmasked = 0
+    it2 = 0
     for modul, nam in parameters_to_prune:
         orig = getattr(modul, nam)
-        lnorms = layer_norms[it]
+        lnorms = layer_norms[it2]
         mask = torch.ones_like(orig)
         default_mask = get_default_mask(modul, nam)
-        for i in range(len(lnorms)):
-            for j in range(len(lnorms[i])):
-                if lnorms[i][j] <= threshold:
-                    count_masked += 1
-                    mask[i][j] = torch.zeros_like(orig[i][j])
-                else:
-                    count_notmasked += 1
-        mask *= default_mask.to(dtype=mask.dtype)
+        if it not in avg_idxs:
+            for i in range(len(lnorms)):
+                for j in range(len(lnorms[i])):
+                    if lnorms[i][j] < threshold:
+                        mask[i][j] = torch.zeros_like(orig[i][j])
+            it2 += 1
         it += 1
+        mask *= default_mask.to(dtype=mask.dtype)
         method = prune.CustomFromMask(mask)
         method.apply(modul, nam, mask)
 
     # Perform redundancy pruning (if active) or prune batch normalization.
     # Redundancy pruning also contains the batch normalization pruning step.
     if Redun:
-        Prune_Redundant_Convolutions_ResNet50(pmodel)
+        Prune_Redundant_Convolutions_ResNet50Avg(pmodel)
     else:
-        apply_mask_to_batchnorm_ResNet50(pmodel)
+        apply_mask_to_batchnorm_ResNet50Avg(pmodel)
     return pmodel
 
 #################################
@@ -633,13 +650,182 @@ def LEAN_UNet4(pmodel, tot_perc, Redun=True, verbose=False):
         apply_mask_to_batchnorm_UNetB4Strided(pmodel)
     return pmodel
 
+def IndivL1_Global_UNet4(pmodel, tot_perc, Redun=True, verbose=False):
+    r"""Prune FCN-UNet4 model using individual filter 
+         pruning based on the L1 vector norm.
+
+    Args:
+        - pmodel: PyTorch-model of FCN-UNet4 to be pruned.
+        - tot_perc (float): The total fraction of convolutions
+            we want pruned at the end of this pruning step.
+        - Redun (bool): Whether to perform redundancy pruning
+            at the end of the pruning phase. Default is True.
+    """
+    # Vector norm to use:
+    N = 1
+
+    # Calculate by what percentage the model needs to be pruned
+    # to obtain 'tot_perc' percent of pruning. It can e.g. require
+    # less than the expected percentage because redundancy pruning
+    # removed a significant amount in the previous pruning phase.
+    if pruned_before_UNet4(pmodel):
+        prun_conv, tot_conv, frac_prun = fraction_pruned_convs_UNetAvg4Strided(pmodel)
+        if frac_prun >= 1 - tot_perc:
+            if verbose:
+                print("No pruning to be done")
+            return pmodel
+        perc = 1.0 - tot_perc/(1.0 - frac_prun)
+    else:
+        perc = 1.0 - tot_perc
+    if verbose:
+        print("Frac pruned convs should be:", 1 - tot_perc)
+
+    parameters_to_prune = get_convs_UNetB4Strided(pmodel)
+    if pruned_before_UNet4(pmodel) and Redun:
+        Prune_Redundant_Convolutions_UNetB4Strided(pmodel)
+
+    avg_idxs = [2, 5, 8, 11]
+    all_norms = np.array([], dtype=np.float32)
+    layer_norms = []
+    it = 0
+    for modul, nam in parameters_to_prune:
+        orig = getattr(modul, nam)
+        if it in avg_idxs:
+            it += 1
+            continue
+        norms = compute_Ln_norms_conv(orig, N).numpy()
+        if pruned_before_UNet4(pmodel):
+            all_norms = np.concatenate((all_norms, norms[norms > 0].flatten()))
+        else:
+            all_norms = np.concatenate((all_norms, norms.flatten()))
+        layer_norms.append(norms.tolist())
+        it += 1
+    threshold = np.percentile(all_norms, 100*perc)
+
+    ### Perform the pruning on the actual Pytorch model
+    conv_masks = []
+    it = 0
+    it2 = 0
+    for modul, nam in parameters_to_prune:
+        orig = getattr(modul, nam)
+        lnorms = layer_norms[it2]
+        mask = torch.ones_like(orig)
+        default_mask = get_default_mask(modul, nam)
+        if it in avg_idxs:
+            pass
+        else:
+            for i in range(len(lnorms)):
+                for j in range(len(lnorms[i])):
+                    if lnorms[i][j] < threshold:
+                        mask[i][j] = torch.zeros_like(orig[i][j])
+            it2 += 1
+        it += 1
+        mask *= default_mask.to(dtype=mask.dtype)
+        method = prune.CustomFromMask(mask)
+        method.apply(modul, nam, mask)
+
+    if Redun:
+        Prune_Redundant_Convolutions_UNetB4Strided(pmodel)
+    else:
+        apply_mask_to_batchnorm_UNetB4Strided(pmodel)
+    return pmodel
+
+def IndivSV_Global_UNet4(pmodel, tot_perc, Redun=True, verbose=False):
+    r"""Prune FCN-UNet4 model using individual filter 
+         pruning based on the spectral operator norm.
+
+    Args:
+        - pmodel: PyTorch-model of FCN-UNet4 to be pruned.
+        - tot_perc (float): The total fraction of convolutions
+            we want pruned at the end of this pruning step.
+        - Redun (bool): Whether to perform redundancy pruning
+            at the end of the pruning phase. Default is True.
+    """
+    # Calculate by what percentage the model needs to be pruned
+    # to obtain 'tot_perc' percent of pruning. It can e.g. require
+    # less than the expected percentage because redundancy pruning
+    # removed a significant amount in the previous pruning phase.
+    if pruned_before_UNet4(pmodel):
+        prun_conv, tot_conv, frac_prun = fraction_pruned_convs_UNetAvg4Strided(pmodel)
+        if frac_prun >= 1 - tot_perc:
+            if verbose:
+                print("No pruning to be done")
+            return pmodel
+        perc = 1.0 - tot_perc/(1.0 - frac_prun)
+    else:
+        perc = 1.0 - tot_perc
+    if verbose:
+        print("Frac pruned convs should be:", 1 - tot_perc)
+
+    M = 16 # Size of temporary input image
+    order = 'max' # SVD-norm used for pruning
+    parameters_to_prune = get_convs_UNetB4Strided(pmodel)
+    batchnorms = get_batchnorms_UNetB4Strided(pmodel)
+    if pruned_before_UNet4(pmodel) and Redun:
+        Prune_Redundant_Convolutions_UNetB4Strided(pmodel)
+    avg_idxs = [2, 5, 8, 11]
+
+    it = 0
+    all_norms = np.array([], dtype=np.float32)
+    layer_norms = []
+    for modul, nam in parameters_to_prune:
+        orig = getattr(modul, nam)
+        strides = modul.stride
+        if it in avg_idxs:
+            it += 1
+            continue
+        norms = compute_FourierSVD_norms(orig, M, order, strides).numpy()
+        if batchnorms[it] is not None:
+            bn_mults = batchnorms[it].weight.data
+            bn_rvar = batchnorms[it].running_var.data
+            eps = batchnorms[it].eps
+            for chan in range(norms.shape[0]):
+                batch_mult = np.abs(bn_mults[chan].cpu().numpy())
+                batch_rvar = bn_rvar[chan].cpu().numpy()
+                batch_mult = batch_mult / np.sqrt(batch_rvar + eps)
+                norms[chan,:] *= batch_mult
+        if pruned_before_UNet4(pmodel):
+            all_norms = np.concatenate((all_norms, norms[norms > 0].flatten()))
+        else:
+            all_norms = np.concatenate((all_norms, norms.flatten()))
+        layer_norms.append(norms.tolist())
+        it += 1
+    threshold = np.percentile(all_norms, 100*perc)
+
+    ### Perform the pruning on the actual Pytorch model
+    masks = []
+    it = 0
+    it2 = 0
+    for modul, nam in parameters_to_prune:
+        orig = getattr(modul, nam)
+        lnorms = layer_norms[it2]
+        mask = torch.ones_like(orig)
+        default_mask = get_default_mask(modul, nam)
+        if it in avg_idxs:
+            pass
+        else:
+            for i in range(len(lnorms)):
+                for j in range(len(lnorms[i])):
+                    if lnorms[i][j] < threshold:
+                        mask[i][j] = torch.zeros_like(orig[i][j])
+            it2 += 1
+        it += 1
+        mask *= default_mask.to(dtype=mask.dtype)
+        method = prune.CustomFromMask(mask)
+        method.apply(modul, nam, mask)
+    if Redun:
+        Prune_Redundant_Convolutions_UNetB4Strided(pmodel)
+    else:
+        apply_mask_to_batchnorm_UNetB4Strided(pmodel)
+    return pmodel
+
 
 ################################
 ###  MS-D PRUNING FUNCTIONS  ###
 ################################
 
 
-def LEAN_SV_MSD(pmodel, tot_perc, Redun=True, verbose=False):
+def LEAN_MSD(pmodel, tot_perc, Redun=True, verbose=False):
     r"""Prune MS-D model using LEAN pruning. 
 
     Args:
@@ -665,7 +851,7 @@ def LEAN_SV_MSD(pmodel, tot_perc, Redun=True, verbose=False):
 
     if pmodel.width > 1:
         raise Exception("Not implemented for MS-D network with width > 1!")
-    M = 64 # Size of temporary input image, (larger because of dilations)
+    M = 128 # Size of temporary input image, (larger because of dilations)
     order = 'max' # SVD-norm used for pruning
     parameters_to_prune = get_convs_MSD(pmodel)
 
@@ -673,39 +859,69 @@ def LEAN_SV_MSD(pmodel, tot_perc, Redun=True, verbose=False):
         Prune_Redundant_Convolutions_MSD(pmodel)
 
     ### Create the norm graph
-    arr_size = pmodel.depth + pmodel.c_in + pmodel.c_out
-    norm_adjacency_matrix = np.zeros(shape=(arr_size, arr_size), dtype=np.float32)
     count = pmodel.c_in
+    adj_list = []
     for modul, nam in parameters_to_prune:
         orig = getattr(modul, nam)
+        strides = (1,1)
+        if prunedQ:
+            current_mask = get_default_mask(modul, nam)
         if orig.size()[-1] == 1:
+            # Deal with the final layer of 1x1-convolutions
             orig1x1 = orig.unsqueeze(2)
-            norms = compute_FourierSVD_norms(orig1x1, M, order).numpy()
-            for i in range(norms.shape[0]):
-                for k in range(norms.shape[1]):
-                    norm_adjacency_matrix[count+i,k] = norms[i,k]
-        else:
-            norms = compute_FourierSVD_norms(orig, M, order).numpy()[0]
-            for k in range(norms.shape[0]):
-                norm_adjacency_matrix[count,k] = norms[k]
-        count += 1
+            # Compute operator norm:
+            norms = compute_FourierSVD_norms(orig1x1, M, order, strides).numpy()
 
-    # Now that we have the matrix, we iteratively extract the strongest
-    # multiplicative paths to keep while pruning. This function returns
-    # a boolean array with the convolutions that should be pruned.
-    pruned = gru.longest_path_prune(norm_adjacency_matrix, perc)
+            for i in range(orig1x1.size()[0]):
+                outidx = count + i
+                for inidx in range(orig1x1.size()[1]):
+                    if prunedQ and current_mask[i, inidx].sum() == 0:
+                        continue
+                    else:
+                        val = norms[i, inidx]
+                        idx_list = len(adj_list)#This is so that we know the order after we perform topological sort
+                        edge = [inidx, outidx, val, idx_list]
+                        adj_list.append(edge)
+        else:
+            # Deal with all the other regular 3x3-convolutions
+            # Compute operator norm:
+            norms = compute_FourierSVD_norms(orig, M, order, strides).numpy()[0]
+
+            for i in range(orig.size()[0]):
+                outidx = count + i
+                for inidx in range(orig.size()[1]):
+                    if prunedQ and current_mask[i, inidx].sum() == 0:
+                        continue
+                    else:
+                        val = norms[inidx]
+                        idx_list = len(adj_list)#This is so that we know the order after we perform topological sort
+                        edge = [inidx, outidx, val, idx_list]
+                        adj_list.append(edge)
+        count += 1
+    adj_list.sort(key=lambda tup: tup[0])
+    adjarr = np.array(adj_list)
+    codebook = np.array([list(range(adjarr.shape[0])), adjarr[:,3].tolist()], dtype=np.int32).transpose()
+    codebook = codebook[np.argsort(codebook[:, 1])]
+    codebook[:,[0, 1]] = codebook[:,[1, 0]]
+
+    # Run the fast Rust implementation
+    pruned = gru.longest_path_prune_fast(adjarr[:,:3], perc, ignore_edges_arr=None)
 
     ### Perform the pruning on the actual Pytorch model
-    it = pmodel.c_in
+    code_iter = 0
     for modul, nam in parameters_to_prune:
         orig = getattr(modul, nam)
         mask = torch.ones_like(orig)
         default_mask = get_default_mask(modul, nam)
         for i in range(mask.size()[0]):
-            for j in range(mask.size()[1]):
-                if pruned[it+i,j]:
-                    mask[i][j] = torch.zeros_like(orig[i][j])
-        it += 1
+            for inidx in range(mask.size()[1]):
+                if prunedQ and default_mask[i, inidx].sum() == 0:# it already was pruned, ergo it has no edge
+                    continue
+                code = codebook[code_iter]
+                edge_idx = code[1]
+                if not pruned[edge_idx]:
+                    mask[i][inidx] = torch.zeros_like(orig[i][inidx])
+                code_iter += 1
         mask *= default_mask.to(dtype=mask.dtype)
         method = prune.CustomFromMask(mask)
         method.apply(modul, nam, mask)
@@ -743,7 +959,7 @@ def IndivSV_Global_MSD(pmodel, tot_perc, Redun=True, verbose=False):
     else:
         perc = 1.0 - tot_perc
     
-    M = 64 # Size of temporary input image, (larger because of dilations)
+    M = 128 # Size of temporary input image, (larger because of dilations)
     order = 'max' # SVD-norm used for pruning
     parameters_to_prune = get_convs_MSD(pmodel)
 
@@ -755,12 +971,16 @@ def IndivSV_Global_MSD(pmodel, tot_perc, Redun=True, verbose=False):
     layer_norms = []
     for modul, nam in parameters_to_prune:
         orig = getattr(modul, nam)
+        strides = (1,1)
         if orig.size()[-1] == 1:
             orig1x1 = orig.unsqueeze(2)
-            norms = compute_FourierSVD_norms(orig1x1, M, order).numpy()
+            norms = compute_FourierSVD_norms(orig1x1, M, order, strides).numpy()
         else:
-            norms = compute_FourierSVD_norms(orig, M, order).numpy()
-        all_norms = np.concatenate((all_norms, norms[norms > 0].flatten()))
+            norms = compute_FourierSVD_norms(orig, M, order, strides).numpy()
+        if pruned_before_MSD(pmodel):
+            all_norms = np.concatenate((all_norms, norms[norms > 0].flatten()))
+        else:
+            all_norms = np.concatenate((all_norms, norms.flatten()))
         layer_norms.append(norms.tolist())
     threshold = np.percentile(all_norms, 100*perc)
 
@@ -828,7 +1048,10 @@ def IndivL1_Global_MSD(pmodel, tot_perc, Redun=True, verbose=False):
             norms = compute_Ln_norms_conv(orig1x1, N).numpy()
         else:
             norms = compute_Ln_norms_conv(orig, N).numpy()
-        all_norms = np.concatenate((all_norms, norms[norms > 0].flatten()))
+        if pruned_before_MSD(pmodel):
+            all_norms = np.concatenate((all_norms, norms[norms > 0].flatten()))
+        else:
+            all_norms = np.concatenate((all_norms, norms.flatten()))
         layer_norms.append(norms.tolist())
     threshold = np.percentile(all_norms, 100*perc)
 
@@ -883,7 +1106,7 @@ def LEAN_SV_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=False):
 
     if pmodel.width > 1:
         raise Exception("Not implemented for MS-D network with width > 1!")
-    M = 64 # Size of temporary input image, (larger because of dilations)
+    M = 128 # Size of temporary input image, (larger because of dilations)
     order = 'max' # SVD-norm used for pruning
     parameters_to_prune = get_convs_MSD(pmodel)
     parameters_to_prune = parameters_to_prune[:-1]
@@ -892,35 +1115,54 @@ def LEAN_SV_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=False):
         Prune_Redundant_Convolutions_MSD3x3(pmodel)
 
     ### Create the norm graph
-    arr_size = pmodel.depth + pmodel.c_in + pmodel.c_out
-    norm_adjacency_matrix = np.zeros(shape=(arr_size, arr_size), dtype=np.float32)
     count = pmodel.c_in
+    adj_list = []
     for modul, nam in parameters_to_prune:
         orig = getattr(modul, nam)
         if orig.size()[-1] == 1:
-            raise Exception("Error found 1x1 convolution!")
+            raise Exception("Something went wrong")
         else:
-            norms = compute_FourierSVD_norms(orig, M, order).numpy()[0]
-            for k in range(norms.shape[0]):
-                norm_adjacency_matrix[count,k] = norms[k]
-        count += 1
+            strides = (1,1)
+            if prunedQ:
+                current_mask = get_default_mask(modul, nam)
 
-    # Now that we have the matrix, we iteratively extract the strongest
-    # multiplicative paths to keep while pruning. This function returns
-    # a boolean array with the convolutions that should be pruned.
-    pruned = gru.longest_path_prune(norm_adjacency_matrix, perc)
+            # Compute convolution operator norm
+            norms = compute_FourierSVD_norms(orig, M, order, strides).numpy()[0]
+            for i in range(orig.size()[0]):
+                outidx = count + i
+                for inidx in range(orig.size()[1]):
+                    if prunedQ and current_mask[i, inidx].sum() == 0:
+                        continue
+                    else:
+                        val = norms[inidx]
+                        idx_list = len(adj_list)#This is so that we know the order after we perform topological sort
+                        edge = [inidx, outidx, val, idx_list]
+                        adj_list.append(edge)
+        count += 1
+    adj_list.sort(key=lambda tup: tup[0])
+    adjarr = np.array(adj_list)
+    codebook = np.array([list(range(adjarr.shape[0])), adjarr[:,3].tolist()], dtype=np.int32).transpose()
+    codebook = codebook[np.argsort(codebook[:, 1])]
+    codebook[:,[0, 1]] = codebook[:,[1, 0]]
+
+    # Run fast Rust implementation
+    pruned = gru.longest_path_prune_fast(adjarr, perc, ignore_edges_arr=None)
 
     ### Perform the pruning on the actual Pytorch model
-    it = pmodel.c_in
+    code_iter = 0
     for modul, nam in parameters_to_prune:
         orig = getattr(modul, nam)
         mask = torch.ones_like(orig)
         default_mask = get_default_mask(modul, nam)
         for i in range(mask.size()[0]):
-            for j in range(mask.size()[1]):
-                if pruned[it+i,j]:
-                    mask[i][j] = torch.zeros_like(orig[i][j])
-        it += 1
+            for inidx in range(mask.size()[1]):
+                if prunedQ and default_mask[i, inidx].sum() == 0:# it already was pruned, ergo it has no edge
+                    continue
+                code = codebook[code_iter]
+                edge_idx = code[1]
+                if not pruned[edge_idx]:
+                    mask[i][inidx] = torch.zeros_like(orig[i][inidx])
+                code_iter += 1
         mask *= default_mask.to(dtype=mask.dtype)
         method = prune.CustomFromMask(mask)
         method.apply(modul, nam, mask)
@@ -971,10 +1213,15 @@ def IndivL1_Global_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=False):
     for modul, nam in parameters_to_prune:
         orig = getattr(modul, nam)
         if orig.size()[-1] == 1:
-            raise Exception("Error found 1x1 convolution!")
+            raise Exception("Something went wrong")
+            orig1x1 = orig.unsqueeze(2)
+            norms = compute_Ln_norms_conv(orig1x1, N).numpy()
         else:
             norms = compute_Ln_norms_conv(orig, N).numpy()
-        all_norms = np.concatenate((all_norms, norms[norms > 0].flatten()))
+        if pruned_before_MSD(pmodel):
+            all_norms = np.concatenate((all_norms, norms[norms > 0].flatten()))
+        else:
+            all_norms = np.concatenate((all_norms, norms.flatten()))
         layer_norms.append(norms.tolist())
     threshold = np.percentile(all_norms, 100*perc)
 
@@ -1028,7 +1275,7 @@ def IndivSV_Global_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=False):
     else:
         perc = 1.0 - tot_perc
 
-    M = 64 # Size of temporary input image, (larger because of dilations)
+    M = 128 # Size of temporary input image, (larger because of dilations)
     order = 'max' # SVD-norm used for pruning
     parameters_to_prune = get_convs_MSD(pmodel)
     parameters_to_prune = parameters_to_prune[:-1]
@@ -1042,13 +1289,17 @@ def IndivSV_Global_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=False):
     for modul, nam in parameters_to_prune:
         orig = getattr(modul, nam)
         if orig.size()[-1] == 1:
-            raise Exception("Error found 1x1 convolution!")
+            raise Exception("Something went wrong")
         else:
-            norms = compute_FourierSVD_norms(orig, M, order).numpy()
-        all_norms = np.concatenate((all_norms, norms[norms > 0].flatten()))
+            strides = (1,1)
+            norms = compute_FourierSVD_norms(orig, M, order, strides).numpy()
+        if pruned_before_MSD(pmodel):
+            all_norms = np.concatenate((all_norms, norms[norms > 0].flatten()))
+        else:
+            all_norms = np.concatenate((all_norms, norms.flatten()))
         layer_norms.append(norms.tolist())
     threshold = np.percentile(all_norms, 100*perc)
-    
+
     ### Perform the pruning on the actual Pytorch model
     it = 0
     for modul, nam in parameters_to_prune:
