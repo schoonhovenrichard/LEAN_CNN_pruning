@@ -31,7 +31,7 @@ def LEAN_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
     # removed a significant amount in the previous pruning phase.
     prunedQ = pruned_before_ResNet50(pmodel)
     if prunedQ:
-        prun_conv, tot_conv, frac_prun = fraction_pruned_convs_ResNet50Avg(pmodel)
+        prun_conv, tot_conv, frac_prun = fraction_pruned_convs_ResNet50(pmodel)
         if frac_prun >= 1 - tot_perc:
             if verbose:
                 print("No pruning to be done")
@@ -44,8 +44,8 @@ def LEAN_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
 
     M = 16 # Size of temporary input image
     order = 'max' # SVD-norm used for pruning
-    parameters_to_prune = get_convs_ResNet50Avg(pmodel)
-    batchnorms = get_batchnorms_ResNet50Avg(pmodel)
+    parameters_to_prune = get_convs_ResNet50(pmodel)
+    batchnorms = get_batchnorms_ResNet50(pmodel)
 
     # These are the indices of the downsample layer and where they point to
     downsample_idxs = [5,15,28,47]
@@ -58,7 +58,7 @@ def LEAN_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
     # If we are considering redundancy pruning, we must remove zero-images to avoid
     #  batch-scaling to skew the norms
     if prunedQ and Redun:
-        Prune_Redundant_Convolutions_ResNet50Avg(pmodel)
+        Prune_Redundant_Convolutions_ResNet50(pmodel)
 
     # Calculate the number of nodes in the graph:
     nr_nodes = pmodel.c_in # start at c_in because of number of input channels
@@ -275,9 +275,9 @@ def LEAN_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
         it += 1
 
     if Redun:
-        Prune_Redundant_Convolutions_ResNet50Avg(pmodel)
+        Prune_Redundant_Convolutions_ResNet50(pmodel)
     else:
-        apply_mask_to_batchnorm_ResNet50Avg(pmodel)
+        apply_mask_to_batchnorm_ResNet50(pmodel)
     return pmodel
 
 
@@ -298,7 +298,7 @@ def IndivL1_Global_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
     # removed a significant amount in the previous pruning phase.
     N = 1
     if pruned_before_ResNet50(pmodel):
-        prun_conv, tot_conv, frac_prun = fraction_pruned_convs_ResNet50Avg(pmodel)
+        prun_conv, tot_conv, frac_prun = fraction_pruned_convs_ResNet50(pmodel)
         if frac_prun >= 1 - tot_perc:
             if verbose:
                 print("No pruning to be done")
@@ -307,9 +307,9 @@ def IndivL1_Global_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
     else:
         perc = 1.0 - tot_perc
 
-    parameters_to_prune = get_convs_ResNet50Avg(pmodel)
+    parameters_to_prune = get_convs_ResNet50(pmodel)
     if pruned_before_ResNet50(pmodel) and Redun:
-        Prune_Redundant_Convolutions_ResNet50Avg(pmodel)
+        Prune_Redundant_Convolutions_ResNet50(pmodel)
 
     avg_idxs = [1]# Index of the average pooling laeyr in the list "parameters to prune"
     all_norms = np.array([], dtype=np.float32)
@@ -353,9 +353,9 @@ def IndivL1_Global_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
     # Perform redundancy pruning (if active) or prune batch normalization.
     # Redundancy pruning also contains the batch normalization pruning step.
     if Redun:
-        Prune_Redundant_Convolutions_ResNet50Avg(pmodel)
+        Prune_Redundant_Convolutions_ResNet50(pmodel)
     else:
-        apply_mask_to_batchnorm_ResNet50Avg(pmodel)
+        apply_mask_to_batchnorm_ResNet50(pmodel)
     return pmodel
 
 def IndivSV_Global_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
@@ -442,9 +442,9 @@ def IndivSV_Global_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
     # Perform redundancy pruning (if active) or prune batch normalization.
     # Redundancy pruning also contains the batch normalization pruning step.
     if Redun:
-        Prune_Redundant_Convolutions_ResNet50Avg(pmodel)
+        Prune_Redundant_Convolutions_ResNet50(pmodel)
     else:
-        apply_mask_to_batchnorm_ResNet50Avg(pmodel)
+        apply_mask_to_batchnorm_ResNet50(pmodel)
     return pmodel
 
 #################################
@@ -645,9 +645,9 @@ def LEAN_UNet4(pmodel, tot_perc, Redun=True, verbose=False):
         it += 1
 
     if Redun:
-        Prune_Redundant_Convolutions_UNetB4Strided(pmodel)
+        Prune_Redundant_Convolutions_UNet4(pmodel)
     else:
-        apply_mask_to_batchnorm_UNetB4Strided(pmodel)
+        apply_mask_to_batchnorm_UNet4(pmodel)
     return pmodel
 
 def IndivL1_Global_UNet4(pmodel, tot_perc, Redun=True, verbose=False):
@@ -725,9 +725,9 @@ def IndivL1_Global_UNet4(pmodel, tot_perc, Redun=True, verbose=False):
         method.apply(modul, nam, mask)
 
     if Redun:
-        Prune_Redundant_Convolutions_UNetB4Strided(pmodel)
+        Prune_Redundant_Convolutions_UNet4(pmodel)
     else:
-        apply_mask_to_batchnorm_UNetB4Strided(pmodel)
+        apply_mask_to_batchnorm_UNet4(pmodel)
     return pmodel
 
 def IndivSV_Global_UNet4(pmodel, tot_perc, Redun=True, verbose=False):
@@ -814,9 +814,9 @@ def IndivSV_Global_UNet4(pmodel, tot_perc, Redun=True, verbose=False):
         method = prune.CustomFromMask(mask)
         method.apply(modul, nam, mask)
     if Redun:
-        Prune_Redundant_Convolutions_UNetB4Strided(pmodel)
+        Prune_Redundant_Convolutions_UNet4(pmodel)
     else:
-        apply_mask_to_batchnorm_UNetB4Strided(pmodel)
+        apply_mask_to_batchnorm_UNet4(pmodel)
     return pmodel
 
 
@@ -1330,6 +1330,8 @@ def IndivSV_Global_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=False):
 ##########################################################################
 
 
+####  MS-D  ####
+
 def prune_biases_MSD(model):
     r"""
     Prune biases in MS-D model layers if the entire layer is pruned.
@@ -1431,6 +1433,9 @@ def Prune_Redundant_Convolutions_MSD3x3(model, verbose=False):
         print("Pruned {} redundant convolutions.".format(count))
     prune_biases_MSD3x3(model)
 
+
+####  ResNet50  ####
+
 def apply_mask_to_batchnorm_ResNet50(pmodel):
     r"""Given the pruned masks of the convolutional layers,
     prune the batch normalization channels if the entire 
@@ -1455,17 +1460,20 @@ def apply_mask_to_batchnorm_ResNet50(pmodel):
             method.apply(modul, nam, bn_mask)
         it += 1
 
-def Prune_Redundant_Convolutions_ResNet50(pmodel, bn_thrs=1e-10, verbose=False):
+def Prune_Redundant_Convolutions_ResNet50(pmodel, bn_thrs = 1e-45, verbose=False):
     r"""Prune redundant convolutions of FCN-ResNet50 model. 
     A convolution is labeled as redundant if
         1) all the input convolutions related to it are pruned.
         2) the running variance of the associated batch normalization
             channel is less than 10^-10.
+
+    NOTE: This function assumes that ResNet has an average pooling layer
+            instead of max-pooling.
     """
     parameters_to_prune = get_convs_ResNet50(pmodel)
     conv_masks = get_conv_masks_ResNet50(pmodel)
     batchnorms = get_batchnorms_ResNet50(pmodel)
-   
+
     # In this loop, we check for each output channel of each layer if all its input channels
     # are pruned. If so, that channel is pruned and afterwards the accompanying batchnorm.
     it = 0
@@ -1474,7 +1482,7 @@ def Prune_Redundant_Convolutions_ResNet50(pmodel, bn_thrs=1e-10, verbose=False):
         if it == 0:
             it += 1
             continue
-        if it in [4,14,27,46]: # Downsample layer:
+        if it in [5,15,28,47]: # Downsample layer:
             prev_mask = conv_masks[it-4]
             mask = conv_masks[it]
             for i in range(prev_mask.size()[0]):
@@ -1482,7 +1490,7 @@ def Prune_Redundant_Convolutions_ResNet50(pmodel, bn_thrs=1e-10, verbose=False):
                     if mask[:,i].sum() != 0:
                         count += 1
                     mask[:,i] = 0
-        elif it in [5,15,28,47]: # Layer after downsample layer:
+        elif it in [6,16,29,48]: # Layer after downsample layer:
             prev_mask1 = conv_masks[it-2]
             prev_mask2 = conv_masks[it-1]
             mask = conv_masks[it]
@@ -1504,7 +1512,7 @@ def Prune_Redundant_Convolutions_ResNet50(pmodel, bn_thrs=1e-10, verbose=False):
     if verbose:
         print("Pruned redundancies type 1:", count)
 
-    # There are also nodes that are not pruned but always output zero_-valued images due to 
+    # There are also nodes that are not pruned but always output zero_-valued images due to
     # ReLU. These nodes can be found by finding running_variances that have gone to 0.
     it = 0
     for batnorm in batchnorms:
@@ -1516,3 +1524,142 @@ def Prune_Redundant_Convolutions_ResNet50(pmodel, bn_thrs=1e-10, verbose=False):
         conv_layer_mask[bat_rvar < bn_thrs] = 0
         it += 1
     apply_mask_to_batchnorm_ResNet50(pmodel)
+
+
+####  U-Net4  ####
+
+def apply_mask_to_batchnorm_UNet4(pmodel):
+    r"""Given the pruned masks of the convolutional layers,
+    prune the batch normalization channels if the entire 
+    associated convolutional channel has been pruned.
+    """
+    conv_masks = get_conv_masks_UNetB4Strided(pmodel)
+    names = ['weight','bias']
+    batchnorms_to_prune = get_batchnorms_UNetB4Strided(pmodel)
+    it = 0
+    for modul in batchnorms_to_prune:
+        if modul is None:
+            it += 1
+            continue
+        mask = conv_masks[it]
+        model_device = mask.device
+        bn_mask = torch.Tensor(np.ones(mask.size()[0])).to(model_device)
+        for i in range(mask.size()[0]):
+            if mask[i].sum() == 0:
+                bn_mask[i] = 0
+        method = prune.CustomFromMask(bn_mask)
+        for nam in names:
+            method.apply(modul, nam, bn_mask)
+        it += 1
+
+def Prune_Redundant_Convolutions_UNet4(pmodel, bn_thrs=1e-10, verbose=False):
+    r"""Prune redundant convolutions of FCN-UNet4 model. 
+    A convolution is labeled as redundant if
+        1) all the input convolutions related to it are pruned.
+        2) the running variance of the associated batch normalization
+            channel is less than 10^-10.
+
+    NOTE: This function assumes that U-Net has average pooling layers
+            instead of max-pooling.
+    """
+    parameters_to_prune = get_convs_UNetB4Strided(pmodel)
+    conv_masks = get_conv_masks_UNetB4Strided(pmodel)
+    batchnorms = get_batchnorms_UNetB4Strided(pmodel)
+
+    # In this loop, we check for each output channel of each layer if all its input channels
+    # are pruned. If so, that channel is pruned and afterwards the accompanying batchnorm.
+    it = 0
+    count = 0
+    #NOTE: While the unet.up1.up may perform the upscaling (indices 14, 17, 20, 23),
+    #       it only has one input, the previous layer. However, the convolutions
+    #       that come directly after, i.e. unet.up1.conv.conv[0], takes two inputs.
+    for modul, nam in parameters_to_prune: #This is only to throw error if misaligned lists
+        if it == 0:
+            it += 1
+            continue
+        elif it == 15: # Certain upscaling layers have 2 inputs (see NOTE):
+            prev_mask1 = conv_masks[10] #it=10 --> unet.down3.mpconv[0].conv[3]
+            prev_mask2 = conv_masks[14] #it=14 --> unet.up1.up
+            mask = conv_masks[it]
+            p1_col_size = prev_mask1.size()[1]
+            for i in range(prev_mask1.size()[0]):
+                if prev_mask1[i].sum() == 0:
+                    if mask[:,i].sum() != 0:
+                        count += 1
+                    mask[:,i] = 0
+            for i in range(prev_mask2.size()[0]):
+                if prev_mask2[i].sum() == 0:
+                    if mask[:, p1_col_size + i].sum() != 0:
+                        count += 1
+                    mask[:, p1_col_size + i] = 0
+        elif it == 18: # Certain upscaling layers have 2 inputs (see NOTE):
+            prev_mask1 = conv_masks[7] #it=7 --> unet.down2.mpconv[0].conv[3]
+            prev_mask2 = conv_masks[17] #it=17 --> unet.up2.up
+            mask = conv_masks[it]
+            p1_col_size = prev_mask1.size()[1]
+            for i in range(prev_mask1.size()[0]):
+                if prev_mask1[i].sum() == 0:
+                    if mask[:,i].sum() != 0:
+                        count += 1
+                    mask[:,i] = 0
+            for i in range(prev_mask2.size()[0]):
+                if prev_mask2[i].sum() == 0:
+                    if mask[:, p1_col_size + i].sum() != 0:
+                        count += 1
+                    mask[:, p1_col_size + i] = 0
+        elif it == 21: # Certain upscaling layers have 2 inputs (see NOTE):
+            prev_mask1 = conv_masks[4] #it=4 --> unet.down1.mpconv[0].conv[3]
+            prev_mask2 = conv_masks[20] #it=20 --> unet.up3.up
+            mask = conv_masks[it]
+            p1_col_size = prev_mask1.size()[1]
+            for i in range(prev_mask1.size()[0]):
+                if prev_mask1[i].sum() == 0:
+                    if mask[:,i].sum() != 0:
+                        count += 1
+                    mask[:,i] = 0
+            for i in range(prev_mask2.size()[0]):
+                if prev_mask2[i].sum() == 0:
+                    if mask[:, p1_col_size + i].sum() != 0:
+                        count += 1
+                    mask[:, p1_col_size + i] = 0
+        elif it == 24: # Certain upscaling layers have 2 inputs (see NOTE):
+            prev_mask1 = conv_masks[1] #it=1 --> unet.inc.conv.conv[3]
+            prev_mask2 = conv_masks[23] #it=23 --> unet.up4.up
+            mask = conv_masks[it]
+            p1_col_size = prev_mask1.size()[1]
+            for i in range(prev_mask1.size()[0]):
+                if prev_mask1[i].sum() == 0:
+                    if mask[:,i].sum() != 0:
+                        count += 1
+                    mask[:,i] = 0
+            for i in range(prev_mask2.size()[0]):
+                if prev_mask2[i].sum() == 0:
+                    if mask[:, p1_col_size + i].sum() != 0:
+                        count += 1
+                    mask[:, p1_col_size + i] = 0
+        else:
+            prev_mask = conv_masks[it-1]
+            mask = conv_masks[it]
+            for i in range(prev_mask.size()[0]):
+                if prev_mask[i].sum() == 0:
+                    if mask[:,i].sum() != 0:
+                        count += 1
+                    mask[:,i] = 0
+        it += 1
+    apply_mask_to_batchnorm_UNet4(pmodel)
+    if verbose:
+        print("Pruned redundancies type 1:", count)
+
+    # There are also nodes that are not pruned but always output zero_-valued images due to 
+    # ReLU. These nodes can be found by finding running_variances that have gone to 0.
+    it = 0
+    for batnorm in batchnorms:
+        if batnorm is None:
+            it += 1
+            continue
+        bat_rvar = batnorm.running_var.data.cpu().detach().numpy()
+        conv_layer_mask = conv_masks[it]
+        conv_layer_mask[bat_rvar < bn_thrs] = 0
+        it += 1
+    apply_mask_to_batchnorm_UNet4(pmodel)
+
