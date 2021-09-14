@@ -30,7 +30,7 @@ def test_LEAN_indiv_MSD3x3(tries=10, eps=0.05):
         percentage = np.exp(np.log(perc)/float(nsteps))
         for step in range(nsteps):
             tot_perc *= percentage
-            model = lean.LEAN_SV_MSD_3x3(model, tot_perc, Redun=False, verbose=False)
+            model = lean.LEAN_MSD_3x3(model, tot_perc, Redun=False, verbose=False)
             prune_frac = lean.fraction_pruned_convs_MSD3x3(model)[2]
 
         # Check if number of pruned convolutions is correct
@@ -66,7 +66,7 @@ def test_LEAN_indiv_MSD(tries=10, eps=0.05):
         percentage = np.exp(np.log(perc)/float(nsteps))
         for step in range(nsteps):
             tot_perc *= percentage
-            model = lean.LEAN_SV_MSD(model, tot_perc, Redun=False, verbose=False)
+            model = lean.LEAN_MSD(model, tot_perc, Redun=False, verbose=False)
             prune_frac = lean.fraction_pruned_convs_MSD(model)[2]
 
         # Check if number of pruned convolutions is correct

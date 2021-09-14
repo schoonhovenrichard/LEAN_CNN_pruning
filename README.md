@@ -23,11 +23,23 @@ conda env create -f environment.yml
 ```
 conda activate LEAN_CNN_pruning
 ```
+Make sure to check that the Anaconda pip installer is being used, not the system version by running ```which pip```.
+
 4. Install the package:
 ```
 pip install -e .
 ```
 
+5. Install Rust if necessary:
+```
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+6. Install the Maturin package for Python bindings, and build:
+```
+pip install maturin
+maturin develop
+```
 
 ## Running tests
 The package contains correctness tests of a number of building block algorithms used in LEAN pruning. To optionally perform these tests,

@@ -10,9 +10,9 @@ if __name__ == '__main__':
     ### USER CONFIGURABLE PARAMETERS
 
     # Choose which pruning procedure to run
-    lean_pruning = True
+    lean_pruning = False
     indivL1_pruning = False
-    indivSV_pruning = False
+    indivSV_pruning = True
 
     # Set the pruning ratio, and fine-tuning parameters
     perc = 0.05
@@ -77,7 +77,7 @@ if __name__ == '__main__':
         for step in range(nsteps):
             tot_perc *= percentage
             # We do not include the final layer for pruning as outlined in paper.
-            model = lean.LEAN_SV_MSD_3x3(model, tot_perc, verbose=False)
+            model = lean.LEAN_MSD_3x3(model, tot_perc, verbose=False)
             for epoch in range(retraining_epochs):
                 model.train(train_dl, 1)
                 train_error = model.validate(train_dl)

@@ -367,7 +367,7 @@ def IndivSV_Global_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
         - tot_perc (float): The total fraction of convolutions
             we want pruned at the end of this pruning step.
         - Redun (bool): Whether to perform redundancy pruning
-            at the end of the pruning phase. Default is True.
+            at the end of the pruning phase. Deft4.
     """
     # Calculate by what percentage the model needs to be pruned
     # to obtain 'tot_perc' percent of pruning. It can e.g. require
@@ -469,7 +469,7 @@ def LEAN_UNet4(pmodel, tot_perc, Redun=True, verbose=False):
     # removed a significant amount in the previous pruning phase.
     prunedQ = pruned_before_UNet4(pmodel)
     if prunedQ:
-        prun_conv, tot_conv, frac_prun = fraction_pruned_convs_UNetAvg4Strided(pmodel)
+        prun_conv, tot_conv, frac_prun = fraction_pruned_convs_UNet4(pmodel)
         if frac_prun >= 1 - tot_perc:
             if verbose:
                 print("No pruning to be done")
@@ -482,8 +482,8 @@ def LEAN_UNet4(pmodel, tot_perc, Redun=True, verbose=False):
 
     M = 16 # Size of temporary input image
     order = 'max' # SVD-norm used for pruning
-    parameters_to_prune = get_convs_UNetB4Strided(pmodel)
-    batchnorms = get_batchnorms_UNetB4Strided(pmodel)
+    parameters_to_prune = get_convs_UNet4(pmodel)
+    batchnorms = get_batchnorms_UNet4(pmodel)
 
     # These are the indices of the downsample layer and where they point to
     # These are the other skip connections which are just identity mappings,
@@ -495,7 +495,7 @@ def LEAN_UNet4(pmodel, tot_perc, Redun=True, verbose=False):
     # If we are considering redundancy pruning, we must remove zero-images
     #to avoid batch-scaling to skew the norms
     if prunedQ and Redun:
-        Prune_Redundant_Convolutions_UNetB4Strided(pmodel)
+        Prune_Redundant_Convolutions_UNet4(pmodel)
 
     # Count the number of nodes that will be in the pruning graph
     nr_nodes = pmodel.c_in # start at c_in because of number of input channels
@@ -669,7 +669,7 @@ def IndivL1_Global_UNet4(pmodel, tot_perc, Redun=True, verbose=False):
     # less than the expected percentage because redundancy pruning
     # removed a significant amount in the previous pruning phase.
     if pruned_before_UNet4(pmodel):
-        prun_conv, tot_conv, frac_prun = fraction_pruned_convs_UNetAvg4Strided(pmodel)
+        prun_conv, tot_conv, frac_prun = fraction_pruned_convs_UNet4(pmodel)
         if frac_prun >= 1 - tot_perc:
             if verbose:
                 print("No pruning to be done")
@@ -680,9 +680,9 @@ def IndivL1_Global_UNet4(pmodel, tot_perc, Redun=True, verbose=False):
     if verbose:
         print("Frac pruned convs should be:", 1 - tot_perc)
 
-    parameters_to_prune = get_convs_UNetB4Strided(pmodel)
+    parameters_to_prune = get_convs_UNet4(pmodel)
     if pruned_before_UNet4(pmodel) and Redun:
-        Prune_Redundant_Convolutions_UNetB4Strided(pmodel)
+        Prune_Redundant_Convolutions_UNet4(pmodel)
 
     avg_idxs = [2, 5, 8, 11]
     all_norms = np.array([], dtype=np.float32)
@@ -746,7 +746,7 @@ def IndivSV_Global_UNet4(pmodel, tot_perc, Redun=True, verbose=False):
     # less than the expected percentage because redundancy pruning
     # removed a significant amount in the previous pruning phase.
     if pruned_before_UNet4(pmodel):
-        prun_conv, tot_conv, frac_prun = fraction_pruned_convs_UNetAvg4Strided(pmodel)
+        prun_conv, tot_conv, frac_prun = fraction_pruned_convs_UNet4(pmodel)
         if frac_prun >= 1 - tot_perc:
             if verbose:
                 print("No pruning to be done")
@@ -759,10 +759,10 @@ def IndivSV_Global_UNet4(pmodel, tot_perc, Redun=True, verbose=False):
 
     M = 16 # Size of temporary input image
     order = 'max' # SVD-norm used for pruning
-    parameters_to_prune = get_convs_UNetB4Strided(pmodel)
-    batchnorms = get_batchnorms_UNetB4Strided(pmodel)
+    parameters_to_prune = get_convs_UNet4(pmodel)
+    batchnorms = get_batchnorms_UNet4(pmodel)
     if pruned_before_UNet4(pmodel) and Redun:
-        Prune_Redundant_Convolutions_UNetB4Strided(pmodel)
+        Prune_Redundant_Convolutions_UNet4(pmodel)
     avg_idxs = [2, 5, 8, 11]
 
     it = 0
@@ -1079,7 +1079,7 @@ def IndivL1_Global_MSD(pmodel, tot_perc, Redun=True, verbose=False):
         prune_biases_MSD(pmodel)
     return pmodel
 
-def LEAN_SV_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=False):
+def LEAN_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=False):
     r"""Prune MS-D model using LEAN pruning, excluding the
          final layer of 1x1-convolutions. 
 
@@ -1123,7 +1123,7 @@ def LEAN_SV_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=False):
             raise Exception("Something went wrong")
         else:
             strides = (1,1)
-            if prunedQ:
+            if pruned_before_MSD(pmodel):
                 current_mask = get_default_mask(modul, nam)
 
             # Compute convolution operator norm
@@ -1131,7 +1131,7 @@ def LEAN_SV_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=False):
             for i in range(orig.size()[0]):
                 outidx = count + i
                 for inidx in range(orig.size()[1]):
-                    if prunedQ and current_mask[i, inidx].sum() == 0:
+                    if pruned_before_MSD(pmodel) and current_mask[i, inidx].sum() == 0:
                         continue
                     else:
                         val = norms[inidx]
@@ -1156,7 +1156,7 @@ def LEAN_SV_MSD_3x3(pmodel, tot_perc, Redun=True, verbose=False):
         default_mask = get_default_mask(modul, nam)
         for i in range(mask.size()[0]):
             for inidx in range(mask.size()[1]):
-                if prunedQ and default_mask[i, inidx].sum() == 0:# it already was pruned, ergo it has no edge
+                if pruned_before_MSD(pmodel) and default_mask[i, inidx].sum() == 0:# it already was pruned, ergo it has no edge
                     continue
                 code = codebook[code_iter]
                 edge_idx = code[1]
@@ -1533,9 +1533,9 @@ def apply_mask_to_batchnorm_UNet4(pmodel):
     prune the batch normalization channels if the entire 
     associated convolutional channel has been pruned.
     """
-    conv_masks = get_conv_masks_UNetB4Strided(pmodel)
+    conv_masks = get_conv_masks_UNet4(pmodel)
     names = ['weight','bias']
-    batchnorms_to_prune = get_batchnorms_UNetB4Strided(pmodel)
+    batchnorms_to_prune = get_batchnorms_UNet4(pmodel)
     it = 0
     for modul in batchnorms_to_prune:
         if modul is None:
@@ -1562,9 +1562,9 @@ def Prune_Redundant_Convolutions_UNet4(pmodel, bn_thrs=1e-10, verbose=False):
     NOTE: This function assumes that U-Net has average pooling layers
             instead of max-pooling.
     """
-    parameters_to_prune = get_convs_UNetB4Strided(pmodel)
-    conv_masks = get_conv_masks_UNetB4Strided(pmodel)
-    batchnorms = get_batchnorms_UNetB4Strided(pmodel)
+    parameters_to_prune = get_convs_UNet4(pmodel)
+    conv_masks = get_conv_masks_UNet4(pmodel)
+    batchnorms = get_batchnorms_UNet4(pmodel)
 
     # In this loop, we check for each output channel of each layer if all its input channels
     # are pruned. If so, that channel is pruned and afterwards the accompanying batchnorm.
