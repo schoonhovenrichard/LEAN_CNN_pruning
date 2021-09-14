@@ -390,6 +390,7 @@ def IndivSV_Global_ResNet50(pmodel, tot_perc, Redun=True, verbose=False):
 
     if pruned_before_ResNet50(pmodel) and Redun:
         Prune_Redundant_Convolutions_ResNet50(pmodel)
+    avg_idxs = [1]
 
     # Compute the operator norms using Fourier transforms
     it = 0
@@ -864,7 +865,8 @@ def LEAN_MSD(pmodel, tot_perc, Redun=True, verbose=False):
     for modul, nam in parameters_to_prune:
         orig = getattr(modul, nam)
         strides = (1,1)
-        if prunedQ:
+
+        if pruned_before_MSD(pmodel):
             current_mask = get_default_mask(modul, nam)
         if orig.size()[-1] == 1:
             # Deal with the final layer of 1x1-convolutions
@@ -875,7 +877,7 @@ def LEAN_MSD(pmodel, tot_perc, Redun=True, verbose=False):
             for i in range(orig1x1.size()[0]):
                 outidx = count + i
                 for inidx in range(orig1x1.size()[1]):
-                    if prunedQ and current_mask[i, inidx].sum() == 0:
+                    if pruned_before_MSD(pmodel) and current_mask[i, inidx].sum() == 0:
                         continue
                     else:
                         val = norms[i, inidx]
@@ -890,7 +892,7 @@ def LEAN_MSD(pmodel, tot_perc, Redun=True, verbose=False):
             for i in range(orig.size()[0]):
                 outidx = count + i
                 for inidx in range(orig.size()[1]):
-                    if prunedQ and current_mask[i, inidx].sum() == 0:
+                    if pruned_before_MSD(pmodel) and current_mask[i, inidx].sum() == 0:
                         continue
                     else:
                         val = norms[inidx]
@@ -915,7 +917,7 @@ def LEAN_MSD(pmodel, tot_perc, Redun=True, verbose=False):
         default_mask = get_default_mask(modul, nam)
         for i in range(mask.size()[0]):
             for inidx in range(mask.size()[1]):
-                if prunedQ and default_mask[i, inidx].sum() == 0:# it already was pruned, ergo it has no edge
+                if pruned_before_MSD(pmodel) and default_mask[i, inidx].sum() == 0:# it already was pruned, ergo it has no edge
                     continue
                 code = codebook[code_iter]
                 edge_idx = code[1]

@@ -10,7 +10,7 @@ from n_longest_paths import mark_longest_paths
 from n_longest_paths import fast_graph_mark_longest_paths
 
 
-def longest_path_prune_fast(adj_list, perc, ignore_edges_arr=None):
+def longest_path_prune_fast(adj_list, perc, ignore_edges_arr=None, verbose=False):
     r"""Fast RUST code for LEAN path extraction. Given an adjacency list
      of the network graph, returns a boolean array of nodes to be pruned
      by keeping the longest value path. Uses the fast Rust implementation 
@@ -25,7 +25,6 @@ def longest_path_prune_fast(adj_list, perc, ignore_edges_arr=None):
                         True if the i-th edge should not be prunable.
     """
     tot_convs = adj_list.shape[0]
-    print(tot_convs)
     if ignore_edges_arr is not None:
         tot_convs -= ignore_edges_arr[:,2].sum()
         ignore_edges = ignore_edges_arr[:,2]
@@ -53,7 +52,8 @@ def longest_path_prune_fast(adj_list, perc, ignore_edges_arr=None):
     path = wrap_skippable(srcs, tgts, lengths, convs_to_prune, "multiplicative", ignore_edges)
 
     pruned_convs = np.where(path)
-    print("Graph algorithm returned", pruned_convs[0].shape[0], "convolutions to keep.")
+    if verbose:
+        print("Graph algorithm returned", pruned_convs[0].shape[0], "convolutions to keep.")
     return path
 
 
@@ -293,7 +293,6 @@ def convert_matr_to_adjlist(adjmat, ignoremat=None):
             edges that are marked as unprunable, these must be
             taken into account when running the graph algorithms.
     """
-    print("Converting adjacency matrix to List format...")
     #edge_dtype = [('from', '<i8'), ('to', '<i8'), ('norm', '<f4')]# Compute edges
     edges = np.where(adjmat != 0)
     adj_list = []

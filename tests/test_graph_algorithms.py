@@ -67,7 +67,7 @@ def create_random_DAG_mat(nrnodes, prob):
     Glog = nx.from_numpy_array(adj_log_mat, create_using=nx.DiGraph)
     return adj_mat, Gr, Glog
 
-def test_longest_path_pruning(tries=10, n=70, p=0.5, eps=0.01):
+def test_longest_path_pruning(tries=10, n=70, p=0.5, eps=0.02):
     """Test computation of longest path pruning
        to see if the pruning ratio is correct.
 
@@ -86,7 +86,7 @@ def test_longest_path_pruning(tries=10, n=70, p=0.5, eps=0.01):
         actually_pruned_ratio = pruned_mat.sum()/float(tot_convs)
         assert abs(actually_pruned_ratio-pratio)/pratio < eps,"Unit test failed for longest path pruning!"
 
-def test_longest_path_pruning_skip(tries=10, n=50, p=0.8, eps=0.01):
+def test_longest_path_pruning_skip(tries=10, n=50, p=0.8, eps=0.02):
     """Test computation of longest path pruning
        to see if the pruning ratio is correct
        when unprunable skip connections are involved.
@@ -104,7 +104,7 @@ def test_longest_path_pruning_skip(tries=10, n=50, p=0.8, eps=0.01):
         # Generate random skip connection matrix
         #  We have to assign edges in current DAG
         #  as skip to avoid possible cycles.
-        skips_mat = np.zeros(shape=matrix.shape, dtype=np.bool)
+        skips_mat = np.zeros(shape=matrix.shape, dtype=bool)
         for i in range(matrix.shape[0]):
             for j in range(matrix.shape[1]):
                 if matrix[i,j] != 0:
@@ -117,8 +117,65 @@ def test_longest_path_pruning_skip(tries=10, n=50, p=0.8, eps=0.01):
         actually_pruned_ratio = pruned_mat.sum()/float(tot_convs)
         assert abs(actually_pruned_ratio-pratio)/pratio < eps,"Unit test failed for longest path pruning!"
 
+def test_longest_path_pruning_fast(tries=10, n=70, p=0.5, eps=0.02):
+    """Test computation of longest path pruning with Rust implementation
+       to see if the pruning ratio is correct.
+
+    We check that:
+    - The pruning method actually prunes the pruning ratio number of nodes
+    """
+    for t in range(tries):
+        # Create random DAG
+        matrix, _, _ = create_random_DAG_mat(n, p)
+        
+        # Draw random pruning ratio
+        pratio = random.uniform(0.1, 0.99)
+        tot_convs = (matrix != 0).sum()
+
+        adj_list = gu.convert_matr_to_adjlist(matrix)
+        pruned_path = gu.longest_path_prune_fast(adj_list, pratio, ignore_edges_arr=None)
+    
+        actually_pruned_ratio = 1.0 - (pruned_path.sum()/float(tot_convs))
+        assert abs(actually_pruned_ratio-pratio)/pratio < eps,"Unit test failed for longest path pruning!"
+
+def test_longest_path_pruning_fast_skip(tries=10, n=50, p=0.8, eps=0.02):
+    """Test computation of longest path pruning with fast Rust implementation
+       to see if the pruning ratio is correct
+       when unprunable skip connections are involved.
+
+    We check that:
+    - The pruning method actually prunes the pruning ratio number of nodes
+    """
+    for t in range(tries):
+        # Create random DAG
+        matrix, _, _ = create_random_DAG_mat(n, p)
+        
+        # Draw random pruning ratio
+        pratio = random.uniform(0.1, 0.99)
+
+        # Generate random skip connection matrix
+        #  We have to assign edges in current DAG
+        #  as skip to avoid possible cycles.
+        skips_mat = np.zeros(shape=matrix.shape, dtype=bool)
+        for i in range(matrix.shape[0]):
+            for j in range(matrix.shape[1]):
+                if matrix[i,j] != 0:
+                    if random.random() > 0.9:
+                        matrix[i,j] = 1
+                        skips_mat[i,j] = True
+
+        tot_convs = (matrix != 0).sum() - skips_mat.sum()
+        adj_list, ignore_list = gu.convert_matr_to_adjlist(matrix, skips_mat)
+
+        pruned_path = gu.longest_path_prune_fast(adj_list, pratio, ignore_edges_arr=ignore_list)
+
+        actually_pruned_ratio = 1.0 - (pruned_path.sum()/float(tot_convs))
+        assert abs(actually_pruned_ratio-pratio)/pratio < eps,"Unit test failed for longest path pruning!"
+
 
 if __name__ == '__main__':
+    test_longest_path_pruning_fast_skip()
+    test_longest_path_pruning_fast()
     test_longest_path_pruning_skip()
     test_longest_path_pruning()
     test_longest_mult_path1()
