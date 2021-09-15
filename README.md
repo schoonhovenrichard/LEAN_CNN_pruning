@@ -13,7 +13,7 @@ The package requires a Nvidia GPU with CUDA installed. The installation instruct
 ## Installation instructions
 To install the package, please
 
-1. Move to the main directory ```cd LEAN_CNN_pruning/```.
+1. Clone the repository ```git clone https://github.com/schoonhovenrichard/LEAN_CNN_pruning.git```  and move to the main directory ```cd LEAN_CNN_pruning/```.
 2. Create conda environment with the required packages using the supplied environment file:
 ```
 conda env create -f environment.yml
