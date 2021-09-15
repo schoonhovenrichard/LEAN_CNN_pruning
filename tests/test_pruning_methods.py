@@ -394,7 +394,7 @@ def ttest_LEAN_ResNet(tries=1, eps=0.05):
 
 if __name__ == '__main__':
     #NOTE: These are called ttest so that py.test does not
-    #  automatically run them.
+    #  automatically run them as they take to long.
     #ttest_l1_indiv_UNet()
     #ttest_SV_indiv_UNet()
     #ttest_LEAN_UNet()

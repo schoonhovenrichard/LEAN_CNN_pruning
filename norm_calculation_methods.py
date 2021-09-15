@@ -6,6 +6,34 @@ import torch.nn as nn
 import torch.nn.utils.prune as prune
 import scipy.linalg
 
+def operator_norm_fourier_torch(w, stride, n):
+    r"""
+    NOTE: ONLY WORKS WITH PyTorch >= 1.9.0, the numpy version is equivalent
+    Args:
+      w (torch.tensor): convolutional filter.
+      stride (int): convolution stride.
+      n (int): image size (n x n image).
+    """
+    if stride == 1:
+        return torch.fft.fftn(w, s=(n, n), norm="backward").abs().max()
+    ws = [w[i::stride, j::stride] for i in range(stride) for j in range(stride)]
+    spectrum = torch.stack([torch.fft.fftn(w, s=(n, n), norm="backward") for w in ws])
+    return spectrum.abs().norm(p=2, dim=0).abs().max()
+
+def operator_norm_fourier(w, stride, n):
+    r"""
+    Args:
+      w (np.array): convolutional filter.
+      stride (int): convolution stride.
+      n (int): image size (n x n image).
+    """
+    if stride == 1:
+        return np.abs(np.fft.fftn(w, s=(n, n), norm="backward")).max()
+    ws = [w[i::stride, j::stride] for i in range(stride) for j in range(stride)]
+    spectrum = np.stack([np.fft.fftn(w, s=(n, n), norm="backward") for w in ws])
+    Svals = np.linalg.norm(np.abs(spectrum), axis=0) # is 2 norm by default for vectors
+    specnorm = Svals.max()
+    return specnorm
 
 def fourier_operatornorm(kern, n, order):
     r"""Computes the FFT of the filter matrix to efficiently 
@@ -73,6 +101,31 @@ def compute_norm_stride2(mat, N, order):
             return np.sqrt(frob)
         else:
             raise Exception("Not implemented order")
+
+def operatornorm_bigH(kern, n, m, order):
+    """For input images of size nxm, this finds the matrix 
+        operator norm of the matrix associated to the the 
+        2D convolution. Order can be 'nuc', 'fro' or 2.
+
+        NOTE: Significantly slower than fourier_operatornorm,
+            but is used for checking validity. Also, this 
+            method assumes zero-padding whereas the Fourier
+            method assumes periodic boundary condiditons.
+    Args:
+        - kern (torch.Tensor): Convolutional filter matrix.
+        - n,m (int): dimension of the (mock) input image.
+        - order (string): String describing the operator norm.
+
+    Returns: norm of filter (float).
+    """
+    kern = kern.cpu().detach().numpy()
+    doubly_blocked = build_bigH(kern, n, m)
+    if order == 'rank':
+        normbigH = np.linalg.matrix_rank(doubly_blocked)
+    else:
+        normbigH = np.linalg.norm(doubly_blocked, order)
+    return normbigH
+
 
 def compute_FourierSVD_norms(t, M, orde, strides):
     r"""Computes the norm of a convolutional layer as interpreted
@@ -195,100 +248,30 @@ def torch_nuc_norm(t):
     norm = torch.norm(t.cpu(), p='nuc', dim=dims)
     return norm
 
-def operatornorm_bigH(kern, n, m, order):
-    """For input images of size nxm, this finds the matrix 
-        operator norm of the matrix associated to the the 
-        2D convolution. Order can be 'nuc', 'fro' or 2.
-
-        NOTE: Significantly slower than fourier_operatornorm,
-            but is used for checking validity. Also, this 
-            method assumes zero-padding whereas the Fourier
-            method assumes periodic boundary condiditons.
-    Args:
-        - kern (torch.Tensor): Convolutional filter matrix.
-        - n,m (int): dimension of the (mock) input image.
-        - order (string): String describing the operator norm.
-
-    Returns: norm of filter (float).
-    """
-    kern = kern.cpu().detach().numpy()
-    k1, k2 = kern.shape
-    filtmat = np.zeros(shape=(n+k1-1,m+k2-1),dtype=np.float32)
-    filtmat[-k1:,:k2] = kern
-    
-    toeplitz_mats = []
-    for i in range(filtmat.shape[0]-1, -1, -1):
-        c = filtmat[i,:]
-        r = np.concatenate([[c[0]], np.zeros(m-1)])
-        toeplitz_m = scipy.linalg.toeplitz(c,r)
-        toeplitz_mats.append(toeplitz_m)
-
-    c = range(1, filtmat.shape[0]+1)
-    r = np.concatenate([[c[0]], np.zeros(n-1, dtype=int)])
-    doubly_indices = scipy.linalg.toeplitz(c, r)
-    toeplitz_shape = toeplitz_mats[0].shape
-    h = toeplitz_shape[0]*doubly_indices.shape[0]
-    w = toeplitz_shape[1]*doubly_indices.shape[1]
-    doubly_blocked_shape = [h, w]
-    doubly_blocked = np.zeros(doubly_blocked_shape)
-
-    b_h, b_w = toeplitz_shape
-    for i in range(doubly_indices.shape[0]):
-        for j in range(doubly_indices.shape[1]):
-            start_i = i * b_h
-            start_j = j * b_w
-            end_i = start_i + b_h
-            end_j = start_j + b_w
-            doubly_blocked[start_i: end_i, start_j:end_j] = toeplitz_mats[doubly_indices[i,j]-1]
-    if order == 'rank':
-        normbigH = np.linalg.matrix_rank(doubly_blocked)
-    else:
-        normbigH = np.linalg.norm(doubly_blocked, order)
-    return normbigH
-
-def compute_BigH_norms(t, M, orde):
-    r"""Computes the norm of a convolutional layer as interpreted
-        as a matrix operator. Uses the slower method that actually
-        builds the matrix. Is used to check the validity.
-
-    Args:
-        t (torch.Tensor): tensor representing the parameter to prune
-        M (int): Dimension of (mock) input image.
-        orde (string, int): Order of the norm. Either a string 'nuc'
-            or 'fro', or an integer.
-
-    Returns:
-        norm (list(float)): List of list of norms for all channels,
-            and all inputs for the tensor.
-    """
-    if t.size()[-1] == 3 and t.size()[-2]==3:
-        tnorms = []
-        for x in range(t.size()[0]):
-            normsx = []
-            for y in range(t[x].size()[0]):
-                kernel = t[x][y]
-                knorm = operatornorm_bigH(kernel, M, M, orde)
-                normsx.append(knorm)
-            tnorms.append(normsx)
-        tnorms = torch.Tensor(tnorms)
-    else:
-        raise Exception("Asked to compute norm of non-convolutional layer!")
-    return tnorms
-
 
 ######################################################################
 ### Utility functions that are not used, but useful for inspection ###
 ######################################################################
 
-def build_bigH(kern, n, m, order):
+def power_method(mat, n, iters=20):
+    x1 = np.ones((n,n))
+    for k in range(iters):
+        x2 = scipy.signal.convolve2d(mat, x1)
+        max_val = max(abs(np.amax(x2)), abs(np.amin(x2)))
+        x1 = x2/max_val
+    return max_val
+
+def build_bigH(kern, n, m):
     r"""For input images of size nxm, this finds the matrix 
         associated to the 2D convolution and computes the 
         norm. Order can be 'nuc', 'fro' or 2.
     """
-    kern = kern.cpu().detach().numpy()
     k1, k2 = kern.shape
     filtmat = np.zeros(shape=(n+k1-1,m+k2-1),dtype=np.float32)
-    filtmat[-k1:,:k2] = kern
+    ## NOTE: scipy implements with reversed kernel!!! So uncomment if
+    # comparing to scipy.convolve
+    #filtmat[-k1:,:k2] = kern
+    filtmat[-k1:,:k2] = np.flip(kern, 0)
 
     toeplitz_mats = []
     for i in range(filtmat.shape[0]-1, -1, -1):
@@ -296,7 +279,6 @@ def build_bigH(kern, n, m, order):
         r = np.concatenate([[c[0]], np.zeros(m-1)])
         toeplitz_m = scipy.linalg.toeplitz(c,r)
         toeplitz_mats.append(toeplitz_m)
-
     c = range(1, filtmat.shape[0]+1)
     r = np.concatenate([[c[0]], np.zeros(n-1, dtype=int)])
     doubly_indices = scipy.linalg.toeplitz(c, r)
@@ -305,7 +287,6 @@ def build_bigH(kern, n, m, order):
     w = toeplitz_shape[1]*doubly_indices.shape[1]
     doubly_blocked_shape = [h, w]
     doubly_blocked = np.zeros(doubly_blocked_shape)
-
     b_h, b_w = toeplitz_shape
     for i in range(doubly_indices.shape[0]):
         for j in range(doubly_indices.shape[1]):
@@ -315,3 +296,42 @@ def build_bigH(kern, n, m, order):
             end_j = start_j + b_w
             doubly_blocked[start_i: end_i, start_j:end_j] = toeplitz_mats[doubly_indices[i,j]-1]
     return doubly_blocked
+
+def build_strided_bigH(kern, N, strid):
+    # Build strided bigH matrix, only for square images
+    pad = kern.shape[0] // 2
+
+    bigH = build_bigH(kern, N, N)
+    padN = N + 2*pad
+    stridN = N//strid
+    if N % strid != 0:
+        stridN += 1
+    bigHstrid = np.zeros(shape=(stridN*stridN, bigH.shape[1]))
+    # Only copy relevant rows
+    it = 0
+    if kern.shape[0] % 2 == 0:# For even convolutions
+        pad -= 1
+        padN -= 1
+        for x in range(pad, pad + N):
+            if (x - pad) % strid != 0:
+                continue
+            for y in range(pad, pad + N):
+                if (y - pad) % strid != 0:
+                    continue
+                index = x*padN + y
+                col = bigH[index,:]
+                bigHstrid[it,:] = col
+                it += 1
+    else:
+        for x in range(pad, pad + N):
+            if (x - pad) % strid != 0:
+                continue
+            for y in range(pad, pad + N):
+                if (y - pad) % strid != 0:
+                    continue
+                index = x*padN + y
+                col = bigH[index,:]
+                bigHstrid[it,:] = col
+                it += 1
+    return bigHstrid
+
