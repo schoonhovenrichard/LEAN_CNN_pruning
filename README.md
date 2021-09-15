@@ -48,9 +48,7 @@ maturin develop
 ```
 
 ## Running tests
-The package contains correctness tests of a number of building block algorithms used in LEAN pruning. To optionally perform these tests,
-
-1. move to the `tests` directory, and run
+The package contains correctness tests of a number of building block algorithms used in LEAN pruning. To optionally perform these tests run
 ```
 py.test
 ```

@@ -10,9 +10,9 @@ if __name__ == '__main__':
     ### USER CONFIGURABLE PARAMETERS
 
     # Choose which pruning procedure to run
-    lean_pruning = False
+    lean_pruning = True
     indivL1_pruning = False
-    indivSV_pruning = True
+    indivSV_pruning = False
 
     # Set the pruning ratio, and fine-tuning parameters
     perc = 0.05

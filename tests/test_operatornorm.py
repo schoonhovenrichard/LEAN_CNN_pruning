@@ -268,7 +268,7 @@ def test_operator_norm_power(tries=10, accept_error=0.1):
 
     # There will be discrepancy because power method is not
     # accurate for this many iterations
-    assert percerror <= 0.05,"Unit test failed for operator norm!"
+    assert percerror <= accept_error,"Unit test failed for operator norm!"
 
 
 def convolve2D(image, kernel, padding=0, strides=1):
