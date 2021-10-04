@@ -41,7 +41,9 @@ pip install -e .
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-6. Install the Maturin package for Python bindings, and build:
+6. Restart the shell so that PATH is reloaded and the Rust compiler is in PATH. Make sure to activate the conda environment again.
+
+7. Install the Maturin package for Python bindings, and build:
 ```
 pip install maturin
 maturin develop
@@ -52,12 +54,12 @@ The package contains correctness tests of a number of building block algorithms 
 ```
 py.test
 ```
-The package also contains tests to test the pruning methods for ResNet and U-Net. However, as these are computationally expensive they are not automatically run by pytest, but rather can be run manually in the ```tests/test_pruning_methods.py``` script.
+Some of the tests are stochastic in nature, so can in rare cases fail. If this happens, please re-run the tests. The package also contains tests to test the pruning methods for ResNet and U-Net. However, as these are computationally expensive they are not automatically run by pytest, but rather can be run manually in the ```tests/test_pruning_methods.py``` script.
 
 ## Running experiments
-The code contains ready-to-run scripts to perform pruning experiments (of all three methods introduced in the paper) on the MS-D network on the simulated Circle-Square (CS) dataset. We provide a script to generate training, validation, and test data. We also provide a script to train an MS-D network on this data. There is already a pretrained network in the `trained_models` folder that the user can use, and there is pre-supplied data. Next, we provide a script to prune the trained MS-D network with any of the three methods described in the manuscript. 
+The code contains ready-to-run scripts to perform pruning experiments (of all three methods introduced in the paper) on the MS-D network on the simulated Circle-Square (CS) dataset. We provide a script to generate training, validation, and test data. We also provide a script to train an MS-D network on this data. There is already a pretrained network in the `examples/trained_models` folder that the user can use, and there is pre-supplied data. Next, we provide a script to prune the trained MS-D network with any of the three methods described in the manuscript. 
 
-In the `pruned_models` folder, example pruned networks from an experimental run are given. To obtain the accuracy of a pruned model on the test set, run 
+In the `examples/pruned_models` folder, example pruned networks from an experimental run are given. To obtain the accuracy of a pruned model on the test set, run 
 `get_global_accuracy(model, test_dl)`. The pruning ratio and accuracy on the test set are automatically written into the filename.
 
 1. First, move to the `examples` directory.
@@ -95,7 +97,7 @@ Here, we have supplied code for pruning MS-D, FCN-UNet4, and FCN-ResNet50 models
 1. A function that returns a list of all the layers of operators that are subject to pruning. Example: `get_convs_MSD` from `pruning_utils.py`.
 2. A function to prune biases for convolutional layers. Example: `prune_biases_MSD` in `pruning_algorithms.py`. The function `prune_biases_MSD` shows how we can iterate over the pruning masks in the model, and check if the convolutional channel is fully pruned. If this is the case, we prune the bias of that channel.
 3. (Optional) If the user wants to include a redundancy pruning step, a function to prune redundant convolutions. Example: `Prune_Redundant_Convolutions_MSD` in `pruning_algorithms.py`. The function `Prune_Redundant_Convolutions_MSD` shows how we can check if all the preceding convolutional channels are pruned, and prune the current channel if this is the case.
-4. A function, or code block, to define the CNN as a pruning graph. One can immediately define the adjacency list, or create an adjacency matrix and use the pre-supplied ```convert_matr_to_adjlist``` function to convert it.  To create an adjacency list, let every operator channel be a node index, and add to the list ```[inidx, outidx, normvalue]``` the edges between the channels. Similarly, the adjacency matrix has at the appropriate positions (columns and rows are the in and out indices) the norms of the convolutions. The code block at line 337 in `LEAN_MSD` shows how we can calculate the norms of the convolutional layers with `compute_FourierSVD_norms`, and insert them into our numpy array.
+4. A function, or code block, to define the CNN as a pruning graph. One can immediately define the adjacency list, or create an adjacency matrix and use the pre-supplied `convert_matr_to_adjlist` function to convert it.  To create an adjacency list, let every channel be a node index, and add to the list `[inidx, outidx, normvalue]` the edges between the channels. Similarly, the adjacency matrix has at the appropriate positions (columns and rows are the in and out indices) the norms of the operators. The code block at line 337 in `LEAN_MSD` shows how we can calculate the norms of the convolutional layers with `compute_FourierSVD_norms`, and insert them into our numpy array.
 
 Given that the above functions have been written, the user can replace the instances of `get_convs_MSD`, `prune_biases_MSD`, and `Prune_Redundant_Convolutions_MSD` with their custom versions. Then, the user can take the code block like the one at line 335 in `pruning_algorithms.py`, and replace it with their custom code to create the norm-graph matrix. The rest of the code can stay the same, and the user has their custom LEAN pruning method!
 
